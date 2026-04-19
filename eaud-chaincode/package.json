@@ -1,0 +1,15 @@
+{
+  "name": "eaud-chaincode",
+  "version": "1.0.0",
+  "description": "eAUD CBDC Chaincode",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "fabric-contract-api": "^2.5.0",
+    "fabric-shim": "^2.5.0",
+    "json-stringify-deterministic": "^1.0.0",
+    "sort-keys-recursive": "^2.0.0"
+  }
+}

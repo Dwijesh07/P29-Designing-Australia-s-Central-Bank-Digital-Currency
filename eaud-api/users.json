@@ -1,0 +1,50 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "rba_admin",
+      "password": "$2b$10$RBA1234567890abcdefghijklmnopqrstuvwxyz",
+      "role": "rba_admin",
+      "name": "RBA Administrator"
+    },
+    {
+      "id": 2,
+      "username": "banka_admin",
+      "password": "$2b$10$BANK1234567890abcdefghijklmnopqrstuvwxyz",
+      "role": "banka_admin",
+      "bank": "BankA",
+      "name": "Bank A Admin"
+    },
+    {
+      "id": 3,
+      "username": "bankb_admin",
+      "password": "$2b$10$BANK1234567890abcdefghijklmnopqrstuvwxyz",
+      "role": "bankb_admin",
+      "bank": "BankB",
+      "name": "Bank B Admin"
+    },
+    {
+      "id": 4,
+      "username": "austrac_admin",
+      "password": "$2b$10$AUSTRAC1234567890abcdefghijklmnopqrstuvwxyz",
+      "role": "austrac_admin",
+      "name": "AUSTRAC Regulator"
+    },
+    {
+      "id": 5,
+      "username": "customer1",
+      "password": "$2b$10$CUSTOMER1234567890abcdefghijklmnopqrstuvwxyz",
+      "role": "customer",
+      "walletId": "wallet1",
+      "name": "John Doe"
+    },
+    {
+      "id": 6,
+      "username": "customer2",
+      "password": "$2b$10$CUSTOMER1234567890abcdefghijklmnopqrstuvwxyz",
+      "role": "customer",
+      "walletId": "wallet2",
+      "name": "Jane Doe"
+    }
+  ]
+}

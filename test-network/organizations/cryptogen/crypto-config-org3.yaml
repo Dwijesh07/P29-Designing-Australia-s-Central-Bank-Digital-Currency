@@ -1,0 +1,11 @@
+# BankB - Commercial Bank (Endorsing Peer)
+PeerOrgs:
+  - Name: BankB
+    Domain: bankb.com.au
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+      SANS:
+        - localhost
+    Users:
+      Count: 1

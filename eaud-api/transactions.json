@@ -1,0 +1,77 @@
+[
+  {
+    "id": "mint-1776140461489",
+    "timestamp": "2026-04-14T04:21:01.489Z",
+    "from": "🏛️ RBA (Mint)",
+    "to": "wallet9",
+    "amount": 50000000000,
+    "type": "mint",
+    "status": "completed",
+    "suspicious": false,
+    "flags": [],
+    "riskScore": 0
+  },
+  {
+    "id": "mint-1774939185759",
+    "timestamp": "2026-03-31T06:39:45.759Z",
+    "from": "🏛️ RBA (Mint)",
+    "to": "wallet8",
+    "amount": 50000000000000000000,
+    "type": "mint",
+    "status": "completed",
+    "suspicious": false,
+    "flags": [],
+    "riskScore": 0
+  },
+  {
+    "id": "tx-1774788589247",
+    "timestamp": "2026-03-29T12:49:49.247Z",
+    "from": "wallet2",
+    "to": "wallet3",
+    "amount": 50,
+    "type": "transfer",
+    "status": "completed",
+    "fromBank": "BankB",
+    "suspicious": false,
+    "flags": [],
+    "riskScore": 0
+  },
+  {
+    "id": "tx-1774788333893",
+    "timestamp": "2026-03-29T12:45:33.893Z",
+    "from": "api-wallet-1",
+    "to": "wallet2",
+    "amount": 300,
+    "type": "transfer",
+    "status": "completed",
+    "fromBank": "BankA",
+    "suspicious": false,
+    "flags": [],
+    "riskScore": 0
+  },
+  {
+    "id": "mint-1774784247927",
+    "timestamp": "2026-03-29T11:37:27.927Z",
+    "from": "🏛️ RBA (Mint)",
+    "to": "wallet1",
+    "amount": 20000000000,
+    "type": "mint",
+    "status": "completed",
+    "suspicious": false,
+    "flags": [],
+    "riskScore": 0
+  },
+  {
+    "id": "tx-1774784198063",
+    "timestamp": "2026-03-29T11:36:38.063Z",
+    "from": "wallet1",
+    "to": "wallet5",
+    "amount": 200,
+    "type": "transfer",
+    "status": "completed",
+    "fromBank": "BankA",
+    "suspicious": false,
+    "flags": [],
+    "riskScore": 0
+  }
+]
