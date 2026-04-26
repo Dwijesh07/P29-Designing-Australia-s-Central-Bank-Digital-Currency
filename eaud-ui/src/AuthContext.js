@@ -2,6 +2,12 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:3001/api';
+
+// Force no caching on all axios requests
+axios.defaults.headers.common['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+axios.defaults.headers.common['Pragma'] = 'no-cache';
+axios.defaults.headers.common['Expires'] = '0';
+
 const AuthContext = createContext();
 
 export function useAuth() {
@@ -14,30 +20,39 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    // Clear any existing axios headers on startup
+    delete axios.defaults.headers.common['Authorization'];
+    
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
       try {
-        const base64Url = token.split('.')[1];
+        const base64Url = storedToken.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const decoded = JSON.parse(atob(base64));
         setUser(decoded);
+        setToken(storedToken);
       } catch (e) {
         console.error('Invalid token');
         localStorage.removeItem('token');
-        setToken(null);
+        delete axios.defaults.headers.common['Authorization'];
       }
     }
     setLoading(false);
-  }, [token]);
+  }, []);
 
   const login = async (username, password) => {
     try {
+      // Clear any existing headers before login
+      delete axios.defaults.headers.common['Authorization'];
+      
       const response = await axios.post(`${API_URL}/auth/login`, { username, password });
       const { token, user } = response.data;
+      
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setToken(token);
@@ -49,15 +64,20 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    // Clear everything
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
+    // Force hard reload to clear all React state and cached data
+    window.location.href = '/';
   };
 
   const value = {
     user,
     token,
+    setUser,
+    setToken,
     login,
     logout,
     isAuthenticated: !!token,

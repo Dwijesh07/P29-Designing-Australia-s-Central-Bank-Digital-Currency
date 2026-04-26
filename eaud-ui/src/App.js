@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { format, formatDistanceToNow } from 'date-fns';
-import { 
-  FaWallet, FaMoneyBillWave, FaBuilding, FaChartLine, 
+import {
+  FaWallet, FaMoneyBillWave, FaBuilding, FaChartLine,
   FaPlus, FaCheckCircle, FaSpinner, FaUsers, FaShieldAlt, FaSignOutAlt,
   FaEye, FaChartBar, FaBell, FaUpload, FaFilePdf, FaCheck
 } from 'react-icons/fa';
@@ -17,25 +17,22 @@ function App() {
   const [selectedWallet, setSelectedWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [kycRecords, setKycRecords] = useState([]);
-  
-  // KYC Upload Form States (for NEW wallets)
+
   const [kycWalletId, setKycWalletId] = useState('');
   const [kycLegalName, setKycLegalName] = useState('');
   const [kycPurpose, setKycPurpose] = useState('');
   const [kycFile, setKycFile] = useState(null);
   const [kycUploaded, setKycUploaded] = useState(false);
   const [kycUploadedWalletId, setKycUploadedWalletId] = useState('');
-  
-  // Wallet Creation Form States (appears after KYC)
+
   const [createWalletId, setCreateWalletId] = useState('');
   const [createLegalName, setCreateLegalName] = useState('');
   const [createPurpose, setCreatePurpose] = useState('');
   const [createBankId, setCreateBankId] = useState(isBankA ? 'BankA' : (isBankB ? 'BankB' : 'BankA'));
-  
-  // Transfer States
+
   const [amount, setAmount] = useState('');
   const [toWallet, setToWallet] = useState('');
-  
+
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('success');
   const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +40,6 @@ function App() {
   const [showSuspicious, setShowSuspicious] = useState(false);
   const [showKycForm, setShowKycForm] = useState(true);
 
-  // Load wallets
   const loadWallets = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/wallets`);
@@ -54,7 +50,6 @@ function App() {
     }
   }, []);
 
-  // Load transactions
   const loadTransactions = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/transactions`);
@@ -64,7 +59,6 @@ function App() {
     }
   }, []);
 
-  // Load KYC records (for AUSTRAC/RBA)
   const loadKycRecords = useCallback(async () => {
     if (isAUSTRAC || isRBA) {
       try {
@@ -95,7 +89,6 @@ function App() {
     setTimeout(() => setMessage(''), 4000);
   };
 
-  // Upload KYC document for a NEW wallet
   const uploadKyc = async () => {
     if (!kycWalletId || !kycLegalName || !kycPurpose || !kycFile) {
       showMessage('Please fill all KYC fields and select a document', 'error');
@@ -128,7 +121,6 @@ function App() {
     }
   };
 
-  // Create wallet (only after KYC is uploaded)
   const createWallet = async () => {
     if (!createWalletId || !createLegalName || !createPurpose) {
       showMessage('Please fill in all fields', 'error');
@@ -145,7 +137,6 @@ function App() {
       });
       showMessage(`✅ Wallet "${createWalletId}" created successfully for ${createLegalName}`, 'success');
       loadWallets();
-      // Reset all forms
       setKycWalletId('');
       setKycLegalName('');
       setKycPurpose('');
@@ -163,7 +154,6 @@ function App() {
     }
   };
 
-  // Reset KYC form to start over
   const resetKycForm = () => {
     setKycWalletId('');
     setKycLegalName('');
@@ -175,7 +165,10 @@ function App() {
     setCreateLegalName('');
     setCreatePurpose('');
     setShowKycForm(true);
-    document.getElementById('kyc-file-input').value = '';
+    const fileInput = document.getElementById('kyc-file-input');
+    if (fileInput) {
+      fileInput.value = '';
+    }
   };
 
   const addFunds = async () => {
@@ -243,6 +236,7 @@ function App() {
   const suspiciousTransactions = transactions.filter(t => t.suspicious);
   const selectedWalletData = wallets.find(w => w.walletId === selectedWallet);
   const pendingKyc = kycRecords.filter(k => k.status === 'PENDING_VERIFICATION').length;
+  const selectedWalletHasKyc = selectedWalletData?.hasKyc || false;
 
   const getRoleBadge = () => {
     if (isRBA) return { text: 'RBA ADMIN', color: '#00ffff', icon: <FaShieldAlt /> };
@@ -259,8 +253,6 @@ function App() {
     return null;
   }
 
-  // Determine which bank the user belongs to (for display)
-  const userBankName = isBankA ? 'BankA' : (isBankB ? 'BankB' : null);
   const userBankLabel = isBankA ? 'Bank A' : (isBankB ? 'Bank B' : null);
 
   return (
@@ -333,36 +325,20 @@ function App() {
 
       <div className="main-content">
         <div className="left-column">
-          {/* RBA Section - Direct Wallet Creation (No KYC) */}
           {isRBA && (
             <div className="card">
               <h2><FaPlus /> Create New Wallet (RBA)</h2>
               <div className="form-group">
                 <label>Wallet ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g., rba-wallet-001"
-                  value={createWalletId}
-                  onChange={(e) => setCreateWalletId(e.target.value)}
-                />
+                <input type="text" placeholder="e.g., rba-wallet-001" value={createWalletId} onChange={(e) => setCreateWalletId(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Legal Name of Organization</label>
-                <input
-                  type="text"
-                  placeholder="Full legal name"
-                  value={createLegalName}
-                  onChange={(e) => setCreateLegalName(e.target.value)}
-                />
+                <input type="text" placeholder="Full legal name" value={createLegalName} onChange={(e) => setCreateLegalName(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Purpose of Account</label>
-                <input
-                  type="text"
-                  placeholder="Purpose of this account"
-                  value={createPurpose}
-                  onChange={(e) => setCreatePurpose(e.target.value)}
-                />
+                <input type="text" placeholder="Purpose of this account" value={createPurpose} onChange={(e) => setCreatePurpose(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Issuing Bank</label>
@@ -377,53 +353,31 @@ function App() {
             </div>
           )}
 
-          {/* Bank Section - KYC Required for each new wallet */}
           {(isBankA || isBankB) && (
             <div className="card">
               <h2><FaPlus /> Create New Customer Wallet</h2>
               <p className="form-note" style={{ marginBottom: '16px', color: '#00ffff' }}>
                 ⚠️ KYC verification is required for each new wallet (AML/CTF compliance)
               </p>
-              
-              {/* Step 1: KYC Upload Form */}
+
               {showKycForm && (
                 <div className="kyc-section" style={{ background: 'rgba(0,255,255,0.05)', padding: '16px', borderRadius: '16px', marginBottom: '20px' }}>
                   <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ffff' }}>📋 Step 1: Upload KYC Document</h3>
                   <div className="form-group">
                     <label>Wallet ID</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., customer-001"
-                      value={kycWalletId}
-                      onChange={(e) => setKycWalletId(e.target.value)}
-                    />
+                    <input type="text" placeholder="e.g., customer-001" value={kycWalletId} onChange={(e) => setKycWalletId(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label>Legal Name of Organization</label>
-                    <input
-                      type="text"
-                      placeholder="Full legal name as per registration"
-                      value={kycLegalName}
-                      onChange={(e) => setKycLegalName(e.target.value)}
-                    />
+                    <input type="text" placeholder="Full legal name as per registration" value={kycLegalName} onChange={(e) => setKycLegalName(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label>Purpose of Account</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Business operations, Salary payments"
-                      value={kycPurpose}
-                      onChange={(e) => setKycPurpose(e.target.value)}
-                    />
+                    <input type="text" placeholder="e.g., Business operations, Salary payments" value={kycPurpose} onChange={(e) => setKycPurpose(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label>KYC Document (Passport / License / Bill)</label>
-                    <input
-                      id="kyc-file-input"
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setKycFile(e.target.files[0])}
-                    />
+                    <input id="kyc-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setKycFile(e.target.files[0])} />
                   </div>
                   <button className="btn-primary" onClick={uploadKyc} disabled={isLoading}>
                     {isLoading ? 'Uploading...' : '📄 Upload KYC Document'}
@@ -431,7 +385,6 @@ function App() {
                 </div>
               )}
 
-              {/* Step 2: Create Wallet Form (appears after KYC) */}
               {kycUploaded && (
                 <div className="create-wallet-section" style={{ background: 'rgba(0,255,0,0.05)', padding: '16px', borderRadius: '16px' }}>
                   <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ff88' }}>✅ Step 2: Create Wallet</h3>
@@ -452,12 +405,7 @@ function App() {
                   </div>
                   <div className="form-group">
                     <label>Issuing Bank</label>
-                    <select 
-                      value={createBankId} 
-                      onChange={(e) => setCreateBankId(e.target.value)}
-                      disabled={isBankA || isBankB}
-                      style={{ opacity: 0.7 }}
-                    >
+                    <select value={createBankId} onChange={(e) => setCreateBankId(e.target.value)} disabled={isBankA || isBankB} style={{ opacity: 0.7 }}>
                       <option value="BankA">Bank A</option>
                       <option value="BankB">Bank B</option>
                     </select>
@@ -478,7 +426,6 @@ function App() {
             </div>
           )}
 
-          {/* AUSTRAC Section */}
           {isAUSTRAC && (
             <div className="card">
               <h2><FaEye /> AML Monitoring</h2>
@@ -503,15 +450,11 @@ function App() {
                 <p className="empty-state">No wallets found.</p>
               ) : (
                 wallets.map((wallet) => (
-                  <div
-                    key={wallet.walletId}
-                    className={`wallet-card ${selectedWallet === wallet.walletId ? 'selected' : ''}`}
-                    onClick={() => selectWallet(wallet.walletId)}
-                  >
+                  <div key={wallet.walletId} className={`wallet-card ${selectedWallet === wallet.walletId ? 'selected' : ''}`} onClick={() => selectWallet(wallet.walletId)}>
                     <div className="wallet-header">
                       <strong>{wallet.walletId}</strong>
                       <span className={`bank-badge ${wallet.bankId === 'BankA' ? 'bank-a' : 'bank-b'}`}>{wallet.bankId}</span>
-                      {(isAUSTRAC || isRBA) && wallet.hasKyc && <FaCheck style={{ color: '#00ff88' }} title="KYC Verified" />}
+                      {(isAUSTRAC || isRBA || isBankA || isBankB) && wallet.hasKyc && <FaCheck style={{ color: '#00ff88' }} title="KYC Verified" />}
                     </div>
                     <div className="wallet-details">
                       <span>👤 {wallet.clientName}</span>
@@ -523,7 +466,6 @@ function App() {
             </div>
           </div>
 
-          {/* Selected Wallet Actions - Only for viewing/managing existing wallets */}
           {selectedWallet && selectedWalletData && (isRBA || isBankA || isBankB || isCustomer) && (
             <div className="card selected-card">
               <h2>🎯 Selected Wallet</h2>
@@ -533,6 +475,7 @@ function App() {
                   <div className="info-item"><label>Client</label><span>{selectedWalletData.clientName}</span></div>
                   <div className="info-item"><label>Bank</label><span>{selectedWalletData.bankId}</span></div>
                   <div className="info-item highlight"><label>Balance</label><span>{formatBalance(selectedWalletData.balance)}</span></div>
+                  <div className="info-item"><label>KYC Status</label><span style={{ color: selectedWalletHasKyc ? '#00ff88' : '#ff4444' }}>{selectedWalletHasKyc ? '✅ Verified' : '❌ Not Verified'}</span></div>
                 </div>
               </div>
 
@@ -574,7 +517,9 @@ function App() {
               </thead>
               <tbody>
                 {transactions.length === 0 ? (
-                  <tr><td colSpan={isAUSTRAC ? 6 : 4} className="empty-state">No transactions</td></tr>
+                  <tr>
+                    <td colSpan={isAUSTRAC ? 6 : 4} className="empty-state">No transactions</td>
+                  </tr>
                 ) : (
                   (showSuspicious ? transactions.filter(t => t.suspicious) : transactions).map((tx) => (
                     <tr key={tx.id} className={tx.suspicious ? 'suspicious-row' : ''}>

@@ -21,9 +21,9 @@ const storage = multer.diskStorage({
         cb(null, 'kyc-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
-const upload = multer({ 
+const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: function (req, file, cb) {
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
         if (allowedTypes.includes(file.mimetype)) {
@@ -34,7 +34,7 @@ const upload = multer({
     }
 });
 
-// Store KYC records (in production, use a database)
+// Store KYC records
 let kycRecords = [];
 const KYC_FILE = path.join(__dirname, 'kyc-records.json');
 if (fs.existsSync(KYC_FILE)) {
@@ -54,7 +54,7 @@ function saveTransactions() {
     fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactionHistory, null, 2));
 }
 
-// Flagged accounts blacklist (for AUSTRAC)
+// Flagged accounts blacklist
 let flaggedAccounts = [];
 const FLAGGED_ACCOUNTS_FILE = path.join(__dirname, 'flagged-accounts.json');
 if (fs.existsSync(FLAGGED_ACCOUNTS_FILE)) {
@@ -67,32 +67,26 @@ function saveFlaggedAccounts() {
 // Helper to detect suspicious transactions
 function detectSuspicious(amount, fromWallet, toWallet, history, fromWalletObj, toWalletObj) {
     const flags = [];
-    
-    // Rule 1: Large transaction > 1000 eAUD
+
     if (amount > 1000) {
         flags.push('LARGE_TRANSACTION (>1000 eAUD)');
     }
-    // Rule 2: Very large transaction > 5000 eAUD
     if (amount > 5000) {
         flags.push('VERY_LARGE_TRANSACTION (>5000 eAUD)');
     }
-    // Rule 3: Round number patterns
     if (amount % 1000 === 0 && amount > 1000) {
         flags.push('ROUND_NUMBER_PATTERN');
     }
-    // Rule 4: Rapid transactions (more than 3 in last minute)
-    const recentTx = history.filter(t => 
+    const recentTx = history.filter(t =>
         new Date(t.timestamp) > new Date(Date.now() - 60000)
     );
     if (recentTx.length > 3) {
         flags.push('RAPID_TRANSACTIONS');
     }
-    // Rule 5: Time anomaly (outside banking hours 9am-5pm)
     const txHour = new Date().getHours();
     if (txHour < 9 || txHour >= 17) {
         flags.push('OUTSIDE_BANKING_HOURS');
     }
-    // Rule 6: Historical pattern deviation (amount > 2x average of last 10 transactions)
     const userTransactions = history.filter(t => t.from === fromWallet || t.to === fromWallet);
     if (userTransactions.length >= 5) {
         const recentAmounts = userTransactions.slice(0, 10).map(t => t.amount);
@@ -101,14 +95,13 @@ function detectSuspicious(amount, fromWallet, toWallet, history, fromWalletObj, 
             flags.push(`HISTORICAL_DEVIATION (${Math.round(amount / avgAmount)}x normal)`);
         }
     }
-    // Rule 7: Flagged account check
     if (flaggedAccounts.includes(fromWallet) || flaggedAccounts.includes(toWallet)) {
         flags.push('FLAGGED_ACCOUNT_ON_WATCHLIST');
     }
-    
+
     const isSuspicious = flags.length > 0;
     const riskScore = Math.min(flags.length * 20 + Math.floor(amount / 2000), 100);
-    
+
     return { isSuspicious, flags, riskScore };
 }
 
@@ -160,22 +153,22 @@ async function getGateway() {
 app.post('/api/auth/login', (req, res) => {
     const { username, password } = req.body;
     const user = verifyUser(username, password);
-    
+
     if (!user) {
         return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
-    
+
     const token = generateToken(user);
-    res.json({ 
-        success: true, 
-        token, 
-        user: { 
-            username: user.username, 
-            role: user.role, 
+    res.json({
+        success: true,
+        token,
+        user: {
+            username: user.username,
+            role: user.role,
             name: user.name,
             bank: user.bank,
             walletId: user.walletId
-        } 
+        }
     });
 });
 
@@ -185,15 +178,14 @@ app.get('/api/auth/verify', authenticate, (req, res) => {
 
 // ============ KYC ENDPOINTS ============
 
-// Upload KYC document
 app.post('/api/kyc/upload', authenticate, upload.single('document'), (req, res) => {
     try {
         const { walletId, legalName, purpose } = req.body;
-        
+
         if (!req.file) {
             return res.status(400).json({ success: false, error: 'No file uploaded' });
         }
-        
+
         const kycRecord = {
             walletId: walletId,
             legalName: legalName,
@@ -205,19 +197,18 @@ app.post('/api/kyc/upload', authenticate, upload.single('document'), (req, res) 
             uploadedAt: new Date().toISOString(),
             status: 'PENDING_VERIFICATION'
         };
-        
-        // Check if KYC already exists for this wallet
+
         const existingIndex = kycRecords.findIndex(k => k.walletId === walletId);
         if (existingIndex !== -1) {
             kycRecords[existingIndex] = kycRecord;
         } else {
             kycRecords.push(kycRecord);
         }
-        
+
         saveKycRecords();
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             message: 'KYC document uploaded successfully. You can now create the wallet.',
             kyc: kycRecord
         });
@@ -227,31 +218,28 @@ app.post('/api/kyc/upload', authenticate, upload.single('document'), (req, res) 
     }
 });
 
-// Check KYC status for a wallet
 app.get('/api/kyc/status/:walletId', authenticate, (req, res) => {
     const { walletId } = req.params;
     const kyc = kycRecords.find(k => k.walletId === walletId);
-    
+
     if (!kyc) {
         return res.json({ success: true, hasKyc: false, message: 'No KYC record found' });
     }
-    
-    res.json({ 
-        success: true, 
-        hasKyc: true, 
+
+    res.json({
+        success: true,
+        hasKyc: true,
         verified: kyc.status === 'VERIFIED',
-        kyc: kyc 
+        kyc: kyc
     });
 });
 
-// Get all KYC records (for AUSTRAC)
 app.get('/api/kyc/all', authenticate, requireRole('rba_admin', 'austrac_admin'), (req, res) => {
     res.json({ success: true, kycRecords: kycRecords });
 });
 
 // ============ FLAGGED ACCOUNTS ENDPOINTS ============
 
-// Add account to blacklist (AUSTRAC only)
 app.post('/api/flagged/add', authenticate, requireRole('austrac_admin', 'rba_admin'), (req, res) => {
     const { walletId } = req.body;
     if (!walletId) {
@@ -264,7 +252,6 @@ app.post('/api/flagged/add', authenticate, requireRole('austrac_admin', 'rba_adm
     res.json({ success: true, message: `Wallet ${walletId} added to watchlist`, flaggedAccounts });
 });
 
-// Remove account from blacklist
 app.post('/api/flagged/remove', authenticate, requireRole('austrac_admin', 'rba_admin'), (req, res) => {
     const { walletId } = req.body;
     flaggedAccounts = flaggedAccounts.filter(id => id !== walletId);
@@ -272,7 +259,6 @@ app.post('/api/flagged/remove', authenticate, requireRole('austrac_admin', 'rba_
     res.json({ success: true, message: `Wallet ${walletId} removed from watchlist`, flaggedAccounts });
 });
 
-// Get all flagged accounts
 app.get('/api/flagged/list', authenticate, requireRole('austrac_admin', 'rba_admin'), (req, res) => {
     res.json({ success: true, flaggedAccounts });
 });
@@ -286,9 +272,9 @@ app.get('/api/wallets', authenticate, async (req, res) => {
         const contract = network.getContract('eaud');
         const result = await contract.evaluateTransaction('GetAllWallets');
         await gateway.disconnect();
-        
+
         let wallets = JSON.parse(result.toString());
-        
+
         if (req.user.role === 'banka_admin') {
             wallets = wallets.filter(w => w.bankId === 'BankA');
         } else if (req.user.role === 'bankb_admin') {
@@ -296,16 +282,16 @@ app.get('/api/wallets', authenticate, async (req, res) => {
         } else if (req.user.role === 'customer') {
             wallets = wallets.filter(w => w.walletId === req.user.walletId);
         }
-        
-        // Add KYC status for AUSTRAC and RBA
-        if (req.user.role === 'austrac_admin' || req.user.role === 'rba_admin') {
+
+        // FIX: Add KYC status for AUSTRAC, RBA, AND BANKS
+        if (req.user.role === 'austrac_admin' || req.user.role === 'rba_admin' || req.user.role === 'banka_admin' || req.user.role === 'bankb_admin') {
             wallets = wallets.map(w => ({
                 ...w,
                 hasKyc: kycRecords.some(k => k.walletId === w.walletId),
                 kycVerified: kycRecords.some(k => k.walletId === w.walletId && k.status === 'VERIFIED')
             }));
         }
-        
+
         res.json({ success: true, wallets });
     } catch (error) {
         console.error('Get wallets error:', error);
@@ -316,32 +302,31 @@ app.get('/api/wallets', authenticate, async (req, res) => {
 app.get('/api/wallet/:walletId', authenticate, async (req, res) => {
     try {
         const { walletId } = req.params;
-        
+
         if (req.user.role === 'customer' && req.user.walletId !== walletId) {
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
-        
+
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.evaluateTransaction('QueryWallet', walletId);
         await gateway.disconnect();
-        
+
         const wallet = JSON.parse(result.toString());
-        
+
         if (req.user.role === 'banka_admin' && wallet.bankId !== 'BankA') {
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
         if (req.user.role === 'bankb_admin' && wallet.bankId !== 'BankB') {
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
-        
-        // Add KYC info
+
         const kyc = kycRecords.find(k => k.walletId === walletId);
         if (kyc && (req.user.role === 'austrac_admin' || req.user.role === 'rba_admin')) {
             wallet.kycInfo = kyc;
         }
-        
+
         res.json({ success: true, wallet });
     } catch (error) {
         console.error('Query wallet error:', error);
@@ -352,40 +337,38 @@ app.get('/api/wallet/:walletId', authenticate, async (req, res) => {
 app.post('/api/wallet/create', authenticate, async (req, res) => {
     try {
         const { walletId, legalName, bankId, purpose } = req.body;
-        
+
         if (!['rba_admin', 'banka_admin', 'bankb_admin'].includes(req.user.role)) {
             return res.status(403).json({ success: false, error: 'Only banks can create wallets' });
         }
-        
-        // Check if KYC exists (unless RBA is creating)
+
         if (req.user.role !== 'rba_admin') {
             const hasKyc = kycRecords.some(k => k.walletId === walletId);
             if (!hasKyc) {
                 return res.status(400).json({ success: false, error: 'KYC document required before wallet creation. Please upload KYC first.' });
             }
         }
-        
+
         if (req.user.role === 'banka_admin' && bankId !== 'BankA') {
             return res.status(403).json({ success: false, error: 'You can only create wallets for BankA' });
         }
         if (req.user.role === 'bankb_admin' && bankId !== 'BankB') {
             return res.status(403).json({ success: false, error: 'You can only create wallets for BankB' });
         }
-        
+
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('CreateWallet', walletId, legalName, bankId);
         await gateway.disconnect();
-        
-        // Update KYC record status
+
         const kycRecord = kycRecords.find(k => k.walletId === walletId);
         if (kycRecord) {
             kycRecord.status = 'VERIFIED';
             kycRecord.walletCreatedAt = new Date().toISOString();
             saveKycRecords();
         }
-        
+
         res.json({ success: true, wallet: JSON.parse(result.toString()) });
     } catch (error) {
         console.error('Create wallet error:', error);
@@ -397,12 +380,12 @@ app.post('/api/wallet/addfunds', authenticate, requireRole('rba_admin'), async (
     try {
         const { walletId, amount } = req.body;
         const amountNum = Number(amount);
-        
+
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('AddFunds', walletId, amount.toString());
-        
+
         const transaction = {
             id: `mint-${Date.now()}`,
             timestamp: new Date().toISOString(),
@@ -417,9 +400,9 @@ app.post('/api/wallet/addfunds', authenticate, requireRole('rba_admin'), async (
         };
         transactionHistory.unshift(transaction);
         saveTransactions();
-        
+
         await gateway.disconnect();
-        
+
         res.json({ success: true, result: JSON.parse(result.toString()) });
     } catch (error) {
         console.error('Add funds error:', error);
@@ -431,18 +414,18 @@ app.post('/api/transfer', authenticate, async (req, res) => {
     try {
         const { fromWallet, toWallet, amount, purpose } = req.body;
         const amountNum = Number(amount);
-        
+
         if (req.user.role === 'customer' && req.user.walletId !== fromWallet) {
             return res.status(403).json({ success: false, error: 'You can only transfer from your own wallet' });
         }
-        
+
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
-        
+
         const fromResult = await contract.evaluateTransaction('QueryWallet', fromWallet);
         const fromWalletObj = JSON.parse(fromResult.toString());
-        
+
         if (req.user.role === 'banka_admin' && fromWalletObj.bankId !== 'BankA') {
             await gateway.disconnect();
             return res.status(403).json({ success: false, error: 'You can only transfer from BankA wallets' });
@@ -451,14 +434,14 @@ app.post('/api/transfer', authenticate, async (req, res) => {
             await gateway.disconnect();
             return res.status(403).json({ success: false, error: 'You can only transfer from BankB wallets' });
         }
-        
+
         const toResult = await contract.evaluateTransaction('QueryWallet', toWallet);
         const toWalletObj = JSON.parse(toResult.toString());
-        
+
         const result = await contract.submitTransaction('TransferEAUD', fromWallet, toWallet, amount.toString());
-        
+
         const suspiciousCheck = detectSuspicious(amountNum, fromWallet, toWallet, transactionHistory, fromWalletObj, toWalletObj);
-        
+
         const transaction = {
             id: `tx-${Date.now()}`,
             timestamp: new Date().toISOString(),
@@ -475,14 +458,14 @@ app.post('/api/transfer', authenticate, async (req, res) => {
             riskScore: suspiciousCheck.riskScore
         };
         transactionHistory.unshift(transaction);
-        
+
         if (transactionHistory.length > 200) {
             transactionHistory = transactionHistory.slice(0, 200);
         }
         saveTransactions();
-        
+
         await gateway.disconnect();
-        
+
         res.json({ success: true, transfer: JSON.parse(result.toString()) });
     } catch (error) {
         console.error('Transfer error:', error);
@@ -495,9 +478,9 @@ app.get('/api/transactions', authenticate, async (req, res) => {
         if (req.user.role === 'austrac_admin' || req.user.role === 'rba_admin') {
             return res.json({ success: true, transactions: transactionHistory });
         }
-        
+
         let filtered = [...transactionHistory];
-        
+
         if (req.user.role === 'banka_admin') {
             filtered = filtered.filter(t => t.fromBank === 'BankA' || t.from === '🏛️ RBA (Mint)');
         } else if (req.user.role === 'bankb_admin') {
@@ -505,7 +488,7 @@ app.get('/api/transactions', authenticate, async (req, res) => {
         } else if (req.user.role === 'customer') {
             filtered = filtered.filter(t => t.from === req.user.walletId || t.to === req.user.walletId);
         }
-        
+
         res.json({ success: true, transactions: filtered });
     } catch (error) {
         console.error('Get transactions error:', error);

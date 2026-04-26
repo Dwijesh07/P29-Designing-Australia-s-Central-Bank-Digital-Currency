@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
-import { useAuth } from './AuthContext';
 import './LoginPage.css';
 
-function LoginPage() {
+function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     
-    const result = await login(username, password);
+    const result = await onLogin(username, password);
     
     if (!result.success) {
       setError(result.error);

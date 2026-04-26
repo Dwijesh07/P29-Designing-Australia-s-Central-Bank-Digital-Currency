@@ -36,15 +36,14 @@
   },
   {
     "walletId": "wallet10",
-    "legalName": "xyz",
-    "purpose": "business",
-    "documentPath": "uploads/kyc/kyc-1776143094249-435799431.pdf",
+    "legalName": "Jon sales",
+    "purpose": "salary",
+    "documentPath": "uploads/kyc/kyc-1776752365539-110239446.pdf",
     "documentName": "Demo_week_5.pdf",
     "documentType": "application/pdf",
     "uploadedBy": "banka_admin",
-    "uploadedAt": "2026-04-14T05:04:54.316Z",
-    "status": "VERIFIED",
-    "walletCreatedAt": "2026-04-14T05:05:06.550Z"
+    "uploadedAt": "2026-04-21T06:19:25.615Z",
+    "status": "PENDING_VERIFICATION"
   },
   {
     "walletId": "wallet6",
@@ -57,5 +56,52 @@
     "uploadedAt": "2026-04-14T23:10:50.570Z",
     "status": "VERIFIED",
     "walletCreatedAt": "2026-04-14T23:11:09.257Z"
+  },
+  {
+    "walletId": "wallet24",
+    "legalName": "cvf",
+    "purpose": "salary",
+    "documentPath": "uploads/kyc/kyc-1776752439509-123288574.pdf",
+    "documentName": "Demo_week_5.pdf",
+    "documentType": "application/pdf",
+    "uploadedBy": "banka_admin",
+    "uploadedAt": "2026-04-21T06:20:39.538Z",
+    "status": "VERIFIED",
+    "walletCreatedAt": "2026-04-21T06:20:44.180Z"
+  },
+  {
+    "walletId": "wallet57",
+    "legalName": "cvy",
+    "purpose": "dcwdc",
+    "documentPath": "uploads/kyc/kyc-1776773599034-722184769.pdf",
+    "documentName": "Demo_week_5.pdf",
+    "documentType": "application/pdf",
+    "uploadedBy": "banka_admin",
+    "uploadedAt": "2026-04-21T12:13:19.087Z",
+    "status": "VERIFIED",
+    "walletCreatedAt": "2026-04-21T12:13:25.623Z"
+  },
+  {
+    "walletId": "wallet5678",
+    "legalName": "dd",
+    "purpose": "aa",
+    "documentPath": "uploads/kyc/kyc-1776774183068-223432000.pdf",
+    "documentName": "Demo_week_5.pdf",
+    "documentType": "application/pdf",
+    "uploadedBy": "banka_admin",
+    "uploadedAt": "2026-04-21T12:23:03.098Z",
+    "status": "VERIFIED",
+    "walletCreatedAt": "2026-04-21T12:23:07.253Z"
+  },
+  {
+    "walletId": "x ",
+    "legalName": "x ",
+    "purpose": "c ",
+    "documentPath": "uploads/kyc/kyc-1776774281819-948285546.pdf",
+    "documentName": "Demo_week_5.pdf",
+    "documentType": "application/pdf",
+    "uploadedBy": "banka_admin",
+    "uploadedAt": "2026-04-21T12:24:41.979Z",
+    "status": "PENDING_VERIFICATION"
   }
 ]
