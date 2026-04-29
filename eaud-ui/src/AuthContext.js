@@ -1,12 +1,19 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import keycloak from './keycloak';
 
 const API_URL = 'http://localhost:3001/api';
 
-// Force no caching on all axios requests
-axios.defaults.headers.common['Cache-Control'] = 'no-cache, no-store, must-revalidate';
-axios.defaults.headers.common['Pragma'] = 'no-cache';
-axios.defaults.headers.common['Expires'] = '0';
+// Add token to all axios requests
+axios.interceptors.request.use(async (config) => {
+  if (keycloak.authenticated && keycloak.token) {
+    if (keycloak.isTokenExpired(10)) {
+      await keycloak.updateToken(30);
+    }
+    config.headers.Authorization = `Bearer ${keycloak.token}`;
+  }
+  return config;
+}, (error) => Promise.reject(error));
 
 const AuthContext = createContext();
 
@@ -20,67 +27,82 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Clear any existing axios headers on startup
-    delete axios.defaults.headers.common['Authorization'];
-    
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-      try {
-        const base64Url = storedToken.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const decoded = JSON.parse(atob(base64));
-        setUser(decoded);
-        setToken(storedToken);
-      } catch (e) {
-        console.error('Invalid token');
-        localStorage.removeItem('token');
-        delete axios.defaults.headers.common['Authorization'];
+    const loadUser = () => {
+      if (!keycloak.authenticated) {
+        keycloak.login();
+        return;
       }
+
+      const tokenParsed = keycloak.tokenParsed;
+      console.log('🔍 Token payload:', tokenParsed);
+      
+      let groups = tokenParsed?.groups || [];
+      if (typeof groups === 'string') {
+        groups = [groups];
+      }
+      
+      console.log('👥 Raw groups:', groups);
+      
+      // Remove the leading slash from group names (Keycloak adds / by default)
+      const normalizedGroups = groups.map(g => String(g).replace(/^\//, '').toLowerCase());
+      console.log('📝 Normalized groups (slash removed):', normalizedGroups);
+      
+      let role = 'customer';
+      let bank = null;
+
+      if (normalizedGroups.includes('rba_admin')) {
+        role = 'rba_admin';
+        console.log('✅ Matched rba_admin role');
+      } else if (normalizedGroups.includes('banka_admin')) {
+        role = 'banka_admin';
+        bank = 'BankA';
+        console.log('✅ Matched banka_admin role');
+      } else if (normalizedGroups.includes('bankb_admin')) {
+        role = 'bankb_admin';
+        bank = 'BankB';
+        console.log('✅ Matched bankb_admin role');
+      } else if (normalizedGroups.includes('austrac_admin')) {
+        role = 'austrac_admin';
+        console.log('✅ Matched austrac_admin role');
+      } else {
+        console.log('❌ No matching group found. Available groups:', normalizedGroups);
+      }
+      
+      console.log('🎭 Final role:', role);
+
+      setUser({
+        username: tokenParsed?.preferred_username,
+        name: tokenParsed?.name || tokenParsed?.preferred_username,
+        role: role,
+        bank: bank,
+        email: tokenParsed?.email
+      });
+      setLoading(false);
+    };
+    
+    if (keycloak.authenticated !== undefined) {
+      loadUser();
+    } else {
+      keycloak.init({ onLoad: 'login-required' }).then(() => loadUser());
     }
-    setLoading(false);
   }, []);
 
-  const login = async (username, password) => {
-    try {
-      // Clear any existing headers before login
-      delete axios.defaults.headers.common['Authorization'];
-      
-      const response = await axios.post(`${API_URL}/auth/login`, { username, password });
-      const { token, user } = response.data;
-      
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setToken(token);
-      setUser(user);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.response?.data?.error || 'Login failed' };
-    }
+  const login = () => {
+    keycloak.login();
   };
 
   const logout = () => {
-    // Clear everything
-    localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
-    setToken(null);
-    setUser(null);
-    // Force hard reload to clear all React state and cached data
-    window.location.href = '/';
+    keycloak.logout({ redirectUri: window.location.origin });
   };
 
   const value = {
     user,
-    token,
-    setUser,
-    setToken,
     login,
     logout,
-    isAuthenticated: !!token,
+    isAuthenticated: keycloak.authenticated || false,
     isRBA: user?.role === 'rba_admin',
     isBankA: user?.role === 'banka_admin',
     isBankB: user?.role === 'bankb_admin',

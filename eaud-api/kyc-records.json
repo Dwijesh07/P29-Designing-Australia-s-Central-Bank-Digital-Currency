@@ -103,5 +103,16 @@
     "uploadedBy": "banka_admin",
     "uploadedAt": "2026-04-21T12:24:41.979Z",
     "status": "PENDING_VERIFICATION"
+  },
+  {
+    "walletId": "wallet589",
+    "legalName": "cvg",
+    "purpose": "salary",
+    "documentPath": "uploads/kyc/kyc-1777369075051-966598559.pdf",
+    "documentName": "Demo_week_5.pdf",
+    "documentType": "application/pdf",
+    "uploadedBy": "banka_admin",
+    "uploadedAt": "2026-04-28T09:37:55.067Z",
+    "status": "PENDING_VERIFICATION"
   }
 ]
