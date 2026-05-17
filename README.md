@@ -112,7 +112,7 @@ API	Open localhost:3001	API responds with connection confirmation
 Frontend	Open localhost:3000	Keycloak login page loads
 Role switching	Log out and log in as different role	Correct dashboard loads for each role
 Repository Structure
-text
+
 P29-Designing-Australia-s-Central-Bank-Digital-Currency/
 ├── eaud-chaincode/              # Hyperledger Fabric chaincode (JavaScript)
 │   ├── lib/
