@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.1
+    container_name: eaud-keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    command: start-dev
+    networks:
+      - eaud-network
+
+  api:
+    build: ./eaud-api
+    container_name: eaud-api
+    ports:
+      - "3001:3001"
+    depends_on:
+      - keycloak
+    networks:
+      - eaud-network
+
+  ui:
+    build: ./eaud-ui
+    container_name: eaud-ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - eaud-network
+
+networks:
+  eaud-network:
+    driver: bridge
