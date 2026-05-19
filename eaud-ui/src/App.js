@@ -4,7 +4,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import {
   FaWallet, FaMoneyBillWave, FaBuilding, FaChartLine,
   FaPlus, FaCheckCircle, FaSpinner, FaUsers, FaShieldAlt, FaSignOutAlt,
-  FaEye, FaChartBar, FaBell, FaUpload, FaFilePdf, FaCheck
+  FaEye, FaChartBar, FaBell, FaFilePdf, FaCheck
 } from 'react-icons/fa';
 import { useAuth } from './AuthContext';
 import './App.css';
@@ -113,7 +113,10 @@ function App() {
       setCreateLegalName(kycLegalName);
       setCreatePurpose(kycPurpose);
       setShowKycForm(false);
-      document.getElementById('kyc-file-input').value = '';
+      const fileInput = document.getElementById('kyc-file-input');
+      if (fileInput) fileInput.value = '';
+      const fileInputRba = document.getElementById('kyc-file-input-rba');
+      if (fileInputRba) fileInputRba.value = '';
     } catch (error) {
       showMessage(`❌ KYC upload failed: ${error.response?.data?.error || error.message}`, 'error');
     } finally {
@@ -166,9 +169,9 @@ function App() {
     setCreatePurpose('');
     setShowKycForm(true);
     const fileInput = document.getElementById('kyc-file-input');
-    if (fileInput) {
-      fileInput.value = '';
-    }
+    if (fileInput) fileInput.value = '';
+    const fileInputRba = document.getElementById('kyc-file-input-rba');
+    if (fileInputRba) fileInputRba.value = '';
   };
 
   const addFunds = async () => {
@@ -325,34 +328,76 @@ function App() {
 
       <div className="main-content">
         <div className="left-column">
+          {/* RBA Section with KYC */}
           {isRBA && (
             <div className="card">
               <h2><FaPlus /> Create New Wallet (RBA)</h2>
-              <div className="form-group">
-                <label>Wallet ID</label>
-                <input type="text" placeholder="e.g., rba-wallet-001" value={createWalletId} onChange={(e) => setCreateWalletId(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Legal Name of Organization</label>
-                <input type="text" placeholder="Full legal name" value={createLegalName} onChange={(e) => setCreateLegalName(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Purpose of Account</label>
-                <input type="text" placeholder="Purpose of this account" value={createPurpose} onChange={(e) => setCreatePurpose(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Issuing Bank</label>
-                <select value={createBankId} onChange={(e) => setCreateBankId(e.target.value)}>
-                  <option value="BankA">Bank A</option>
-                  <option value="BankB">Bank B</option>
-                </select>
-              </div>
-              <button className="btn-primary" onClick={createWallet} disabled={isLoading}>
-                {isLoading ? 'Creating...' : '✨ Create Wallet'}
-              </button>
+              <p className="form-note" style={{ marginBottom: '16px', color: '#ffaa00' }}>
+                ⚠️ KYC documentation is required for ALL wallet creation including RBA.
+              </p>
+
+              {showKycForm && (
+                <div className="kyc-section" style={{ background: 'rgba(0,255,255,0.05)', padding: '16px', borderRadius: '16px', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ffff' }}>📋 Step 1: Upload KYC Document</h3>
+                  <div className="form-group">
+                    <label>Wallet ID</label>
+                    <input type="text" placeholder="e.g., rba-wallet-001" value={kycWalletId} onChange={(e) => setKycWalletId(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Legal Name of Organization</label>
+                    <input type="text" placeholder="Full legal name as per registration" value={kycLegalName} onChange={(e) => setKycLegalName(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Purpose of Account</label>
+                    <input type="text" placeholder="e.g., System operations, Reserve management" value={kycPurpose} onChange={(e) => setKycPurpose(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>KYC Document (Passport / License / Bill)</label>
+                    <input id="kyc-file-input-rba" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setKycFile(e.target.files[0])} />
+                  </div>
+                  <button className="btn-primary" onClick={uploadKyc} disabled={isLoading}>
+                    {isLoading ? 'Uploading...' : '📄 Upload KYC Document'}
+                  </button>
+                </div>
+              )}
+
+              {kycUploaded && (
+                <div className="create-wallet-section" style={{ background: 'rgba(0,255,0,0.05)', padding: '16px', borderRadius: '16px' }}>
+                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ff88' }}>✅ Step 2: Create Wallet</h3>
+                  <p className="form-note" style={{ marginBottom: '12px', color: '#00ff88' }}>
+                    KYC verified for {kycUploadedWalletId}. You can now create the wallet.
+                  </p>
+                  <div className="form-group">
+                    <label>Wallet ID</label>
+                    <input type="text" value={createWalletId} disabled style={{ opacity: 0.7 }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Legal Name of Organization</label>
+                    <input type="text" value={createLegalName} disabled style={{ opacity: 0.7 }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Purpose of Account</label>
+                    <input type="text" value={createPurpose} disabled style={{ opacity: 0.7 }} />
+                  </div>
+                  <div className="form-group">
+                    <label>Issuing Bank</label>
+                    <select value={createBankId} onChange={(e) => setCreateBankId(e.target.value)}>
+                      <option value="BankA">Bank A</option>
+                      <option value="BankB">Bank B</option>
+                    </select>
+                  </div>
+                  <button className="btn-primary" onClick={createWallet} disabled={isLoading}>
+                    {isLoading ? 'Creating...' : '✨ Create Wallet'}
+                  </button>
+                  <button className="btn-secondary" onClick={resetKycForm} style={{ marginTop: '8px' }}>
+                    Start Over (New Wallet)
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
+          {/* Bank Section */}
           {(isBankA || isBankB) && (
             <div className="card">
               <h2><FaPlus /> Create New Customer Wallet</h2>
@@ -418,7 +463,7 @@ function App() {
                   <button className="btn-primary" onClick={createWallet} disabled={isLoading}>
                     {isLoading ? 'Creating...' : '✨ Create Wallet'}
                   </button>
-                  <button className="btn-secondary" onClick={resetKycForm} style={{ marginTop: '8px', background: 'rgba(255,68,68,0.2)', color: '#ff4444' }}>
+                  <button className="btn-secondary" onClick={resetKycForm} style={{ marginTop: '8px' }}>
                     Start Over (New Customer)
                   </button>
                 </div>
@@ -426,6 +471,7 @@ function App() {
             </div>
           )}
 
+          {/* AUSTRAC Section */}
           {isAUSTRAC && (
             <div className="card">
               <h2><FaEye /> AML Monitoring</h2>

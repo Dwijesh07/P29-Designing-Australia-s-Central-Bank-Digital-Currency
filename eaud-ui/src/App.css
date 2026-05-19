@@ -680,3 +680,22 @@ td.ref {
     max-width: 90%;
   }
 }
+
+/* FIX 1: Table horizontal scroll for large numbers */
+.transactions-section {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.transactions-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  min-width: 800px;
+}
+
+td.amount {
+  white-space: nowrap;
+}
