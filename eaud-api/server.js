@@ -165,7 +165,7 @@ app.post('/api/kyc/upload', authenticate, upload.single('document'), (req, res) 
     try {
         const { walletId, legalName, purpose } = req.body;
         if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
-        
+
         const kycRecord = {
             walletId, legalName, purpose,
             documentPath: req.file.path,
@@ -175,12 +175,12 @@ app.post('/api/kyc/upload', authenticate, upload.single('document'), (req, res) 
             uploadedAt: new Date().toISOString(),
             status: 'PENDING_VERIFICATION'
         };
-        
+
         const existingIndex = kycRecords.findIndex(k => k.walletId === walletId);
         if (existingIndex !== -1) kycRecords[existingIndex] = kycRecord;
         else kycRecords.push(kycRecord);
         saveKycRecords();
-        
+
         res.json({ success: true, message: 'KYC uploaded successfully', kyc: kycRecord });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -230,18 +230,18 @@ app.get('/api/wallets', authenticate, async (req, res) => {
         const result = await contract.evaluateTransaction('GetAllWallets');
         await gateway.disconnect();
         let wallets = JSON.parse(result.toString());
-        
+
         const role = req.user.role;
         if (role === 'banka_admin') wallets = wallets.filter(w => w.bankId === 'BankA');
         else if (role === 'bankb_admin') wallets = wallets.filter(w => w.bankId === 'BankB');
-        
+
         // Add KYC status for all roles that need to see it
         wallets = wallets.map(w => ({
             ...w,
             hasKyc: kycRecords.some(k => k.walletId === w.walletId),
             kycVerified: kycRecords.some(k => k.walletId === w.walletId && k.status === 'VERIFIED')
         }));
-        
+
         res.json({ success: true, wallets });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -251,19 +251,27 @@ app.get('/api/wallets', authenticate, async (req, res) => {
 app.post('/api/wallet/create', authenticate, async (req, res) => {
     try {
         const { walletId, legalName, bankId, purpose } = req.body;
+        
+        // KYC check - required for ALL wallet creation (RBA, BankA, BankB)
+        // Client requested in Week 8 that RBA also provide documentation
+        const hasKyc = kycRecords.some(k => k.walletId === walletId);
+        if (!hasKyc) {
+            return res.status(400).json({ success: false, error: 'KYC document required before wallet creation. Please upload KYC first.' });
+        }
+        
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('CreateWallet', walletId, legalName, bankId);
         await gateway.disconnect();
-        
+
         // Update KYC status for this wallet if exists
         const kyc = kycRecords.find(k => k.walletId === walletId);
         if (kyc) {
             kyc.status = 'VERIFIED';
             saveKycRecords();
         }
-        
+
         res.json({ success: true, wallet: JSON.parse(result.toString()) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -293,7 +301,7 @@ app.post('/api/transfer', authenticate, async (req, res) => {
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('TransferEAUD', fromWallet, toWallet, amount.toString());
         await gateway.disconnect();
-        
+
         // Add to transaction history
         const transaction = {
             id: `tx-${Date.now()}`,
@@ -305,7 +313,7 @@ app.post('/api/transfer', authenticate, async (req, res) => {
         };
         transactionHistory.unshift(transaction);
         saveTransactions();
-        
+
         res.json({ success: true, transfer: JSON.parse(result.toString()) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
