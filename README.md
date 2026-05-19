@@ -1,73 +1,246 @@
-[//]: # (SPDX-License-Identifier: CC-BY-4.0)
+# eAUD Central Bank Digital Currency Platform
 
-# Hyperledger Fabric Samples
+## P29 – Designing Australia's Central Bank Digital Currency
 
-You can use Fabric samples to get started working with Hyperledger Fabric, explore important Fabric features, and learn how to build applications that can interact with blockchain networks using the Fabric SDKs. To learn more about Hyperledger Fabric, visit the [Fabric documentation](https://hyperledger-fabric.readthedocs.io/en/latest).
+**COS40006 / EAT40006 – Computing/Engineering Technology Project B**  
+**Swinburne University of Technology | 2026**
 
-Note that this branch contains samples for the latest Fabric release. For older Fabric versions, refer to the corresponding branches:
+---
 
-- [release-2.2](https://github.com/hyperledger/fabric-samples/tree/release-2.2)
-- [release-1.4](https://github.com/hyperledger/fabric-samples/tree/release-1.4)
+## Overview
 
-## Getting started with the Fabric samples
+The eAUD CBDC platform is a prototype central bank digital currency system built on Hyperledger Fabric. The platform demonstrates a four-organisation blockchain network consisting of the Reserve Bank of Australia (RBA), two commercial banks (BankA and BankB), and AUSTRAC as a regulatory observer node.
 
-To use the Fabric samples, you need to download the Fabric Docker images and the Fabric CLI tools. First, make sure that you have installed all of the [Fabric prerequisites](https://hyperledger-fabric.readthedocs.io/en/latest/prereqs.html). You can then follow the instructions to [Install the Fabric Samples, Binaries, and Docker Images](https://hyperledger-fabric.readthedocs.io/en/latest/install.html) in the Fabric documentation. In addition to downloading the Fabric images and tool binaries, the Fabric samples will also be cloned to your local machine.
+### Core Features
 
-## Test network
+- **Four-organisation Hyperledger Fabric network** with RBA, BankA, BankB, and AUSTRAC on `eaudchannel`
+- **Custom eAUD chaincode** with wallet creation, minting (AddFunds), transfers, and balance queries
+- **Keycloak SSO authentication** with role-based access for five user types
+- **KYC document upload** with verified tick status visible to bank admins
+- **AML detection engine** with real-time risk scoring and suspicious activity alerts
+- **AUSTRAC monitoring dashboard** with transaction filtering, export (PDF/CSV), and analytics charts
+- **Role-specific dashboards** for RBA Admin, BankA Admin, BankB Admin, AUSTRAC Admin, and Customer
 
-The [Fabric test network](test-network) in the samples repository provides a Docker Compose based test network with two
-Organization peers and an ordering service node. You can use it on your local machine to run the samples listed below.
-You can also use it to deploy and test your own Fabric chaincodes and applications. To get started, see
-the [test network tutorial](https://hyperledger-fabric.readthedocs.io/en/latest/test_network.html).
+---
 
-The [Kubernetes Test Network](test-network-k8s) sample builds upon the Compose network, constructing a Fabric
-network with peer, orderer, and CA infrastructure nodes running on Kubernetes.  In addition to providing a sample
-Kubernetes guide, the Kube test network can be used as a platform to author and debug _cloud ready_ Fabric Client
-applications on a development or CI workstation.
+## Technology Stack
+
+| Component | Technology |
+|-----------|------------|
+| Blockchain | Hyperledger Fabric v2.5.x |
+| Chaincode | JavaScript (Node.js) |
+| Backend API | Node.js / Express |
+| Frontend | React.js |
+| Authentication | Keycloak (OpenID Connect / OAuth2) |
+| Database | CouchDB (state database) |
+| Containerisation | Docker / Docker Compose (in progress) |
+
+---
+
+## Prerequisites
+
+Before installing the eAUD platform, ensure you have the following:
+
+| Requirement | Minimum Version | Notes |
+|-------------|----------------|-------|
+| Docker Desktop | v4.0+ | Must be running. Enable WSL2 integration. |
+| WSL2 with Ubuntu | Ubuntu 22.04+ | Required for Hyperledger Fabric. |
+| Node.js | v22.0+ | Required for API and React frontend. |
+| npm | v10.0+ | Installed with Node.js. |
+| Git | Any | Required to clone the repository. |
+| Hyperledger Fabric Binaries | v2.5.x | Located in `~/fabric-samples/bin` |
+
+---
+
+## Quick Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Dwijesh07/P29-Designing-Australia-s-Central-Bank-Digital-Currency
+cd P29-Designing-Australia-s-Central-Bank-Digital-Currency
+
+2. Start Hyperledger Fabric Network (WSL Ubuntu)
+bash
+cd ~/fabric-samples/test-network
+./network.sh up createChannel -c eaudchannel -s couchdb
+3. Deploy eAUD Chaincode
+bash
+./network.sh deployCC -ccn eaud -ccp ../eaud-chaincode -ccl javascript -c eaudchannel
+4. Start Keycloak Container
+bash
+docker run -d -p 8080:8080 \
+  -e KEYCLOAK_ADMIN=admin \
+  -e KEYCLOAK_ADMIN_PASSWORD=admin \
+  quay.io/keycloak/keycloak:latest start-dev
+5. Import eAUD Realm
+Open http://localhost:8080 in your browser
+
+Log in with admin / admin
+
+Go to Realm Settings → Import
+
+Select eaud-realm.json from the repository root
+
+Click Import — this creates all groups, users, and role mappings
+
+6. Start Backend API
+bash
+cd eaud-api
+npm install
+node server.js
+7. Start React Frontend
+bash
+cd eaud-ui
+npm install
+npm start
+8. Access the Application
+Open http://localhost:3000 in your browser. The Keycloak login page will load.
+
+Default Login Credentials
+Username	Password	Role	Dashboard Access
+rba_admin	admin123	RBA Admin	Full system — all wallets, minting, transfers
+banka_admin	bankA123	BankA Admin	BankA wallets and KYC only
+bankb_admin	bankB123	BankB Admin	BankB wallets and KYC only
+austrac_admin	austrac123	AUSTRAC Admin	AML monitoring, all transactions, exports
+customer1	pass123	Customer	Own wallet and transaction history only
+Verifying Installation
+Check	How to Verify	Expected Result
+Fabric network	docker ps in WSL Ubuntu	Containers for peer0.org1, peer0.org2, orderer, couchdb0, couchdb1 all Up
+Keycloak	Open localhost:8080	Admin console loads, eAUD realm visible
+API	Open localhost:3001	API responds with connection confirmation
+Frontend	Open localhost:3000	Keycloak login page loads
+Role switching	Log out and log in as different role	Correct dashboard loads for each role
+Repository Structure
+
+P29-Designing-Australia-s-Central-Bank-Digital-Currency/
+├── eaud-chaincode/              # Hyperledger Fabric chaincode (JavaScript)
+│   ├── lib/
+│   │   ├── wallet.js            # CreateWallet, GetWallet, GetAllWallets
+│   │   ├── transfer.js          # TransferEAUD function
+│   │   └── admin.js             # AddFunds (minting) function
+│   └── index.js                 # Chaincode entry point
+│
+├── eaud-api/                    # Node.js/Express backend API
+│   ├── routes/
+│   │   ├── auth.js              # Keycloak token validation
+│   │   ├── wallets.js           # Wallet creation, queries, transfers
+│   │   ├── kyc.js               # KYC document upload and status
+│   │   └── aml.js               # AUSTRAC monitoring and risk scoring
+│   ├── uploads/kyc/             # KYC document storage directory
+│   ├── server.js                # Main server with middleware
+│   └── package.json
+│
+├── eaud-ui/                     # React frontend application
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Dashboard/       # Role-specific dashboards
+│   │   │   ├── Auth/            # Keycloak login integration
+│   │   │   └── Common/          # Shared components
+│   │   ├── contexts/
+│   │   │   └── AuthContext.js   # Keycloak authentication state
+│   │   └── App.js
+│   ├── public/
+│   └── package.json
+│
+├── fabric-samples/              # Hyperledger Fabric test network
+│   └── test-network/            # Network configuration and scripts
+│
+├── eaud-realm.json              # Keycloak realm export (users, groups, roles)
+├── docker-compose.yml           # Docker orchestration (in progress)
+├── README.md                    # This file
+└── LICENSE
+Troubleshooting
+Issue	Solution
+Docker ps shows no containers	Docker Desktop is not running. Open Docker Desktop and wait for it to fully start.
+Fabric network fails to start	Run ./network.sh down first to clear previous state, then re-run the up command.
+Chaincode deployment fails	Ensure Node.js is installed inside WSL Ubuntu. Run node --version inside WSL to confirm.
+Keycloak login page does not load	Wait 30–60 seconds for Keycloak container to initialise, then try again.
+Wallets not showing after login	Confirm Fabric network is up and node server.js is running in the eaud-api directory.
+Role shows as undefined after login	Re-import eaud-realm.json into Keycloak and ensure the group mapper is present.
+KYC upload fails	Ensure file is PDF, JPG, or PNG under 5MB. The uploads/kyc/ folder must exist.
+User Roles Guide
+RBA Admin
+Create wallets for any organisation (no KYC required)
+
+Mint eAUD using AddFunds function
+
+Transfer funds between any wallets
+
+View full transaction history across all organisations
+
+Statistics cards show total wallets, total eAUD supply, active banks, and system risk score
+
+BankA / BankB Admin
+Upload KYC documents before wallet creation (wallet creation blocked without KYC)
+
+Enter Legal Name of Organisation and Purpose of Account when creating wallets
+
+Transfers restricted to wallets within the same bank
+
+KYC verified tick appears on wallet card once verification is complete
+
+AUSTRAC Admin
+View all transactions across all organisations with real-time risk scores
+
+View suspicious activity flags and AML alerts
+
+Filter transactions by date, bank, and risk level
+
+Export transaction data as PDF or CSV
+
+View transaction analytics charts (volume over time, transactions by bank, high-risk ratio)
+
+Add wallets to flagged accounts watchlist
+
+Customer
+View own wallet balance and transaction history
+
+Initiate transfers to other wallets
+
+View KYC verification status
+
+Dockerization Status
+Full Docker Compose orchestration is in progress. Once complete, a single command will start all services:
+
+bash
+docker-compose up
+This will replace Steps 2–7 of the installation process. Check the repository for updates.
+
+Security & Compliance
+The eAUD platform aligns with the following Australian regulatory frameworks:
+
+APRA CPS 234 – Information security requirements for financial institutions
+
+APRA CPS 230 – Operational risk management
+
+AML/CTF Act 2006 – Suspicious matter reporting (ss41–43)
+
+Privacy Act 1988 – Australian Privacy Principles (APP 8 for data transfers)
+
+ACSC Essential Eight – MFA-capable infrastructure
+
+ACSC ISM-1139 – TLS 1.2 minimum requirement
+
+Contributors
+Name	Role	Responsibilities
+Isar Ujoodah	Scrum Master / Lead Developer	Keycloak integration, Dockerization, KYC tick fix, API, chaincode, documentation
+Luvish Rajnath	Team Member	PDF export for AML reports
+Lasith Perera	Team Member	Pagination, search, Keycloak documentation
+Farzana Moietry	Team Member	Email notifications for suspicious transactions
+Ashikur Rahman	Team Member	Transaction charts for AUSTRAC dashboard
+Al Hamid Arath	Team Member	CSV export for AML reports
+License
+This project is for academic purposes as part of Swinburne University of Technology's Engineering Technology Project B (EAT40006 / COS40006).
+
+Contact
+GitHub: https://github.com/Dwijesh07/P29-Designing-Australia-s-Central-Bank-Digital-Currency
+
+Client: Sameen Chishti
+
+Supervisor: Swinburne University of Technology
+
+For any issues not covered in the troubleshooting section, please refer to the GitHub repository or contact the Scrum Master.
 
 
-## Asset transfer samples and tutorials
 
-The asset transfer series provides a series of sample smart contracts and applications to demonstrate how to store and transfer assets using Hyperledger Fabric.
-Each sample and associated tutorial in the series demonstrates a different core capability in Hyperledger Fabric. The **Basic** sample provides an introduction on how
-to write smart contracts and how to interact with a Fabric network using the Fabric SDKs. The **Ledger queries**, **Private data**, and **State-based endorsement**
-samples demonstrate these additional capabilities. Finally, the **Secured agreement** sample demonstrates how to bring all the capabilities together to securely
-transfer an asset in a more realistic transfer scenario.
-
-|  **Smart Contract** | **Description** | **Tutorial** | **Smart contract languages** | **Application languages** |
-| -----------|------------------------------|----------|---------|---------|
-| [Basic](asset-transfer-basic) | The Basic sample smart contract that allows you to create and transfer an asset by putting data on the ledger and retrieving it. This sample is recommended for new Fabric users. | [Writing your first application](https://hyperledger-fabric.readthedocs.io/en/latest/write_first_app.html) | Go, JavaScript, TypeScript, Java | Go, TypeScript, Java |
-| [Ledger queries](asset-transfer-ledger-queries) | The ledger queries sample demonstrates range queries and transaction updates using range queries (applicable for both LevelDB and CouchDB state databases), and how to deploy an index with your chaincode to support JSON queries (applicable for CouchDB state database only). | [Using CouchDB](https://hyperledger-fabric.readthedocs.io/en/latest/couchdb_tutorial.html) | Go, JavaScript | Java, JavaScript |
-| [Private data](asset-transfer-private-data) | This sample demonstrates the use of private data collections, how to manage private data collections with the chaincode lifecycle, and how the private data hash can be used to verify private data on the ledger. It also demonstrates how to control asset updates and transfers using client-based ownership and access control. | [Using Private Data](https://hyperledger-fabric.readthedocs.io/en/latest/private_data_tutorial.html) | Go, TypeScript, Java | TypeScript |
-| [State-Based Endorsement](asset-transfer-sbe) | This sample demonstrates how to override the chaincode-level endorsement policy to set endorsement policies at the key-level (data/asset level). | [Using State-based endorsement](https://github.com/hyperledger/fabric-samples/tree/main/asset-transfer-sbe) | Java, TypeScript | JavaScript |
-| [Secured agreement](asset-transfer-secured-agreement) | Smart contract that uses implicit private data collections, state-based endorsement, and organization-based ownership and access control to keep data private and securely transfer an asset with the consent of both the current owner and buyer. | [Secured asset transfer](https://hyperledger-fabric.readthedocs.io/en/latest/secured_asset_transfer/secured_private_asset_transfer_tutorial.html)  | Go | TypeScript |
-| [Events](asset-transfer-events) | The events sample demonstrates how smart contracts can emit events that are read by the applications interacting with the network. | [README](asset-transfer-events/README.md)  | Go, JavaScript, Java | Go, TypeScript, Java |
-| [Attribute-based access control](asset-transfer-abac) | Demonstrates the use of attribute and identity based access control using a simple asset transfer scenario | [README](asset-transfer-abac/README.md)  | Go | _None_ |
-
-## Full stack asset transfer guide
-
-The [full stack asset transfer guide](full-stack-asset-transfer-guide#readme) workshop demonstrates how a generic asset transfer solution for Hyperledger Fabric can be developed and deployed. This covers chaincode development, client application development, and deployment to a production-like environment.
-
-## Additional samples
-
-Additional samples demonstrate various Fabric use cases and application patterns.
-
-|  **Sample** | **Description** | **Documentation** |
-| -------------|------------------------------|------------------|
-| [Off chain data](off_chain_data) | Learn how to use block events to build an off-chain database for reporting and analytics. | [Peer channel-based event services](https://hyperledger-fabric.readthedocs.io/en/latest/peer_event_services.html) |
-| [Token SDK](token-sdk) | Sample REST API around the Hyperledger Labs [Token SDK](https://github.com/hyperledger-labs/fabric-token-sdk) for privacy friendly (zero knowledge proof) UTXO transactions. | [README](token-sdk/README.md) |
-| [Token ERC-20](token-erc-20) | Smart contract demonstrating how to create and transfer fungible tokens using an account-based model. | [README](token-erc-20/README.md) |
-| [Token UTXO](token-utxo) | Smart contract demonstrating how to create and transfer fungible tokens using a UTXO (unspent transaction output) model. | [README](token-utxo/README.md) |
-| [Token ERC-1155](token-erc-1155) | Smart contract demonstrating how to create and transfer multiple tokens (both fungible and non-fungible) using an account based model. | [README](token-erc-1155/README.md) |
-| [Token ERC-721](token-erc-721) | Smart contract demonstrating how to create and transfer non-fungible tokens using an account-based model. | [README](token-erc-721/README.md) |
-| [High throughput](high-throughput) | Learn how you can design your smart contract to avoid transaction collisions in high volume environments. | [README](high-throughput/README.md) |
-| [Simple Auction](auction-simple) | Run an auction where bids are kept private until the auction is closed, after which users can reveal their bid. | [README](auction-simple/README.md) |
-| [Dutch Auction](auction-dutch) | Run an auction in which multiple items of the same type can be sold to more than one buyer. This example also includes the ability to add an auditor organization. | [README](auction-dutch/README.md) |
-
-
-## License <a name="license"></a>
-
-Hyperledger Project source code files are made available under the Apache
-License, Version 2.0 (Apache-2.0), located in the [LICENSE](LICENSE) file.
-Hyperledger Project documentation files are made available under the Creative
-Commons Attribution 4.0 International License (CC-BY-4.0), available at http://creativecommons.org/licenses/by/4.0/.
