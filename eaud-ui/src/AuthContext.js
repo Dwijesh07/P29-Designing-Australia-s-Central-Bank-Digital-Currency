@@ -1,93 +1,105 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import keycloak from './keycloak';
-
-const API_URL = 'http://localhost:3001/api';
-
-// Add token to all axios requests
-axios.interceptors.request.use(async (config) => {
-  if (keycloak.authenticated && keycloak.token) {
-    if (keycloak.isTokenExpired(10)) {
-      await keycloak.updateToken(30);
-    }
-    config.headers.Authorization = `Bearer ${keycloak.token}`;
-  }
-  return config;
-}, (error) => Promise.reject(error));
 
 const AuthContext = createContext();
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 }
+
+// Attach the real Keycloak token to every backend request
+axios.interceptors.request.use(
+  async (config) => {
+    if (keycloak.authenticated && keycloak.token) {
+      try {
+        if (keycloak.isTokenExpired(10)) {
+          await keycloak.updateToken(30);
+        }
+
+        config.headers.Authorization = `Bearer ${keycloak.token}`;
+      } catch (error) {
+        console.error('Token refresh failed:', error);
+        keycloak.login();
+      }
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadUser = () => {
-      if (!keycloak.authenticated) {
-        keycloak.login();
-        return;
-      }
+  const buildUserFromToken = () => {
+    const tokenParsed = keycloak.tokenParsed || {};
 
-      const tokenParsed = keycloak.tokenParsed;
-      console.log('🔍 Token payload:', tokenParsed);
-      
-      let groups = tokenParsed?.groups || [];
-      if (typeof groups === 'string') {
-        groups = [groups];
-      }
-      
-      console.log('👥 Raw groups:', groups);
-      
-      // Remove the leading slash from group names (Keycloak adds / by default)
-      const normalizedGroups = groups.map(g => String(g).replace(/^\//, '').toLowerCase());
-      console.log('📝 Normalized groups (slash removed):', normalizedGroups);
-      
-      let role = 'customer';
-      let bank = null;
+    let groups = tokenParsed.groups || [];
 
-      if (normalizedGroups.includes('rba_admin')) {
-        role = 'rba_admin';
-        console.log('✅ Matched rba_admin role');
-      } else if (normalizedGroups.includes('banka_admin')) {
-        role = 'banka_admin';
-        bank = 'BankA';
-        console.log('✅ Matched banka_admin role');
-      } else if (normalizedGroups.includes('bankb_admin')) {
-        role = 'bankb_admin';
-        bank = 'BankB';
-        console.log('✅ Matched bankb_admin role');
-      } else if (normalizedGroups.includes('austrac_admin')) {
-        role = 'austrac_admin';
-        console.log('✅ Matched austrac_admin role');
-      } else {
-        console.log('❌ No matching group found. Available groups:', normalizedGroups);
-      }
-      
-      console.log('🎭 Final role:', role);
-
-      setUser({
-        username: tokenParsed?.preferred_username,
-        name: tokenParsed?.name || tokenParsed?.preferred_username,
-        role: role,
-        bank: bank,
-        email: tokenParsed?.email
-      });
-      setLoading(false);
-    };
-    
-    if (keycloak.authenticated !== undefined) {
-      loadUser();
-    } else {
-      keycloak.init({ onLoad: 'login-required' }).then(() => loadUser());
+    if (typeof groups === 'string') {
+      groups = [groups];
     }
+
+    const normalizedGroups = groups.map((g) =>
+      String(g).replace(/^\//, '').toLowerCase()
+    );
+
+    let role = 'customer';
+    let bank = null;
+
+    if (normalizedGroups.includes('rba_admin')) {
+      role = 'rba_admin';
+    } else if (normalizedGroups.includes('banka_admin')) {
+      role = 'banka_admin';
+      bank = 'BankA';
+    } else if (normalizedGroups.includes('bankb_admin')) {
+      role = 'bankb_admin';
+      bank = 'BankB';
+    } else if (
+      normalizedGroups.includes('austrac_admin') ||
+      normalizedGroups.includes('austrac')
+    ) {
+      role = 'austrac_admin';
+    }
+
+    return {
+      username: tokenParsed.preferred_username || 'unknown-user',
+      name:
+        tokenParsed.name ||
+        `${tokenParsed.given_name || ''} ${tokenParsed.family_name || ''}`.trim() ||
+        tokenParsed.preferred_username ||
+        'User',
+      email: tokenParsed.email || '',
+      role,
+      bank,
+      groups: normalizedGroups
+    };
+  };
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const authenticated = await keycloak.init({
+          onLoad: 'login-required',
+          checkLoginIframe: false
+        });
+
+        if (authenticated) {
+          const loggedUser = buildUserFromToken();
+          setUser(loggedUser);
+        } else {
+          keycloak.login();
+        }
+      } catch (error) {
+        console.error('Keycloak init failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
   const login = () => {
@@ -95,7 +107,12 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    keycloak.logout({ redirectUri: window.location.origin });
+    localStorage.clear();
+    sessionStorage.clear();
+
+    keycloak.logout({
+      redirectUri: window.location.origin
+    });
   };
 
   const value = {
@@ -103,6 +120,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     isAuthenticated: keycloak.authenticated || false,
+
     isRBA: user?.role === 'rba_admin',
     isBankA: user?.role === 'banka_admin',
     isBankB: user?.role === 'bankb_admin',
@@ -111,7 +129,10 @@ export function AuthProvider({ children }) {
   };
 
   if (loading) {
-    return <div style={{ background: '#0a0c1a', minHeight: '100vh' }}></div>;
+    return (
+      <div style={{ background: '#0a0c1a', minHeight: '100vh' }}>
+      </div>
+    );
   }
 
   return (

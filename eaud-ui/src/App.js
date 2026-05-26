@@ -13,6 +13,7 @@ const API_URL = 'http://localhost:3001/api';
 
 function App() {
   const { user, logout, isRBA, isBankA, isBankB, isAUSTRAC, isCustomer } = useAuth();
+
   const [wallets, setWallets] = useState([]);
   const [selectedWallet, setSelectedWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -28,7 +29,9 @@ function App() {
   const [createWalletId, setCreateWalletId] = useState('');
   const [createLegalName, setCreateLegalName] = useState('');
   const [createPurpose, setCreatePurpose] = useState('');
-  const [createBankId, setCreateBankId] = useState(isBankA ? 'BankA' : (isBankB ? 'BankB' : 'BankA'));
+  const [createBankId, setCreateBankId] = useState(
+    isBankA ? 'BankA' : isBankB ? 'BankB' : 'BankA'
+  );
 
   const [amount, setAmount] = useState('');
   const [toWallet, setToWallet] = useState('');
@@ -40,10 +43,16 @@ function App() {
   const [showSuspicious, setShowSuspicious] = useState(false);
   const [showKycForm, setShowKycForm] = useState(true);
 
+  // Transaction search + pagination + bank filter
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionBankFilter, setTransactionBankFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const transactionsPerPage = 10;
+
   const loadWallets = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/wallets`);
-      setWallets(response.data.wallets);
+      setWallets(response.data.wallets || []);
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error loading wallets:', error);
@@ -53,7 +62,7 @@ function App() {
   const loadTransactions = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/transactions`);
-      setTransactions(response.data.transactions);
+      setTransactions(response.data.transactions || []);
     } catch (error) {
       console.error('Error loading transactions:', error);
     }
@@ -63,7 +72,7 @@ function App() {
     if (isAUSTRAC || isRBA) {
       try {
         const response = await axios.get(`${API_URL}/kyc/all`);
-        setKycRecords(response.data.kycRecords);
+        setKycRecords(response.data.kycRecords || []);
       } catch (error) {
         console.error('Error loading KYC records:', error);
       }
@@ -75,13 +84,27 @@ function App() {
       loadWallets();
       loadTransactions();
       loadKycRecords();
+
       const interval = setInterval(() => {
         loadWallets();
         loadTransactions();
       }, 10000);
+
       return () => clearInterval(interval);
     }
   }, [user, loadWallets, loadTransactions, loadKycRecords]);
+
+  useEffect(() => {
+    if (isBankA) {
+      setCreateBankId('BankA');
+    } else if (isBankB) {
+      setCreateBankId('BankB');
+    }
+  }, [isBankA, isBankB]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [transactionSearch, transactionBankFilter, showSuspicious, transactions]);
 
   const showMessage = (msg, type = 'success') => {
     setMessage(msg);
@@ -102,10 +125,12 @@ function App() {
     formData.append('document', kycFile);
 
     setIsLoading(true);
+
     try {
       await axios.post(`${API_URL}/kyc/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+
       showMessage(`✅ KYC uploaded for ${kycWalletId}. You can now create the wallet.`, 'success');
       setKycUploaded(true);
       setKycUploadedWalletId(kycWalletId);
@@ -113,10 +138,11 @@ function App() {
       setCreateLegalName(kycLegalName);
       setCreatePurpose(kycPurpose);
       setShowKycForm(false);
+
       const fileInput = document.getElementById('kyc-file-input');
-      if (fileInput) fileInput.value = '';
-      const fileInputRba = document.getElementById('kyc-file-input-rba');
-      if (fileInputRba) fileInputRba.value = '';
+      if (fileInput) {
+        fileInput.value = '';
+      }
     } catch (error) {
       showMessage(`❌ KYC upload failed: ${error.response?.data?.error || error.message}`, 'error');
     } finally {
@@ -131,6 +157,7 @@ function App() {
     }
 
     setIsLoading(true);
+
     try {
       await axios.post(`${API_URL}/wallet/create`, {
         walletId: createWalletId,
@@ -138,8 +165,10 @@ function App() {
         bankId: createBankId,
         purpose: createPurpose
       });
+
       showMessage(`✅ Wallet "${createWalletId}" created successfully for ${createLegalName}`, 'success');
-      loadWallets();
+      await loadWallets();
+
       setKycWalletId('');
       setKycLegalName('');
       setKycPurpose('');
@@ -168,22 +197,30 @@ function App() {
     setCreateLegalName('');
     setCreatePurpose('');
     setShowKycForm(true);
+
     const fileInput = document.getElementById('kyc-file-input');
-    if (fileInput) fileInput.value = '';
-    const fileInputRba = document.getElementById('kyc-file-input-rba');
-    if (fileInputRba) fileInputRba.value = '';
+    if (fileInput) {
+      fileInput.value = '';
+    }
   };
 
   const addFunds = async () => {
-    if (!selectedWallet || !amount || amount <= 0) {
+    if (!selectedWallet || !amount || Number(amount) <= 0) {
       showMessage('Please select a wallet and enter a valid amount', 'error');
       return;
     }
+
     setIsLoading(true);
+
     try {
-      const response = await axios.post(`${API_URL}/wallet/addfunds`, { walletId: selectedWallet, amount });
+      const response = await axios.post(`${API_URL}/wallet/addfunds`, {
+        walletId: selectedWallet,
+        amount
+      });
+
       showMessage(`💰 Minted ${amount} eAUD. New balance: ${response.data.result.newBalance} eAUD`, 'success');
-      loadWallets();
+      await loadWallets();
+      await loadTransactions();
       setAmount('');
     } catch (error) {
       showMessage(`❌ Error: ${error.response?.data?.error || error.message}`, 'error');
@@ -193,19 +230,28 @@ function App() {
   };
 
   const transferFunds = async () => {
-    if (!selectedWallet || !toWallet || !amount || amount <= 0) {
+    if (!selectedWallet || !toWallet || !amount || Number(amount) <= 0) {
       showMessage('Please fill in all transfer fields', 'error');
       return;
     }
+
     if (selectedWallet === toWallet) {
       showMessage('Cannot transfer to the same wallet', 'error');
       return;
     }
+
     setIsLoading(true);
+
     try {
-      await axios.post(`${API_URL}/transfer`, { fromWallet: selectedWallet, toWallet, amount });
+      await axios.post(`${API_URL}/transfer`, {
+        fromWallet: selectedWallet,
+        toWallet,
+        amount
+      });
+
       showMessage(`🔄 Transferred ${amount} eAUD to ${toWallet}`, 'success');
-      loadWallets();
+      await loadWallets();
+      await loadTransactions();
       setAmount('');
       setToWallet('');
     } catch (error) {
@@ -225,18 +271,21 @@ function App() {
       currency: 'AUD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 2
-    }).format(balance).replace('AUD', 'eAUD');
+    }).format(Number(balance || 0)).replace('AUD', 'eAUD');
   };
 
   const getStatusIcon = (status) => {
-    if (status === 'completed') return <FaCheckCircle style={{ color: '#00ff88' }} />;
+    if (status === 'completed') {
+      return <FaCheckCircle style={{ color: '#00ff88' }} />;
+    }
+
     return <FaSpinner style={{ color: '#888' }} />;
   };
 
   const totalWallets = wallets.length;
-  const totalSupply = wallets.reduce((sum, w) => sum + w.balance, 0);
-  const activeBanks = [...new Set(wallets.map(w => w.bankId))].length;
-  const suspiciousTransactions = transactions.filter(t => t.suspicious);
+  const totalSupply = wallets.reduce((sum, w) => sum + Number(w.balance || 0), 0);
+  const activeBanks = [...new Set(wallets.map(w => w.bankId))].filter(Boolean).length;
+  const suspiciousTransactions = transactions.filter(t => t.suspicious || t.isSuspicious);
   const selectedWalletData = wallets.find(w => w.walletId === selectedWallet);
   const pendingKyc = kycRecords.filter(k => k.status === 'PENDING_VERIFICATION').length;
   const selectedWalletHasKyc = selectedWalletData?.hasKyc || false;
@@ -247,6 +296,7 @@ function App() {
     if (isBankB) return { text: 'BANK B ADMIN', color: '#ff00ff', icon: <FaBuilding /> };
     if (isAUSTRAC) return { text: 'AUSTRAC REGULATOR', color: '#ffaa00', icon: <FaEye /> };
     if (isCustomer) return { text: 'CUSTOMER', color: '#888', icon: <FaUsers /> };
+
     return { text: 'UNKNOWN', color: '#888', icon: null };
   };
 
@@ -258,6 +308,77 @@ function App() {
 
   const userBankLabel = isBankA ? 'Bank A' : (isBankB ? 'Bank B' : null);
 
+  const getTransactionBankInfo = (tx) => {
+    const fromWalletData = wallets.find((w) => w.walletId === tx.from);
+    const toWalletData = wallets.find((w) => w.walletId === tx.to);
+
+    return {
+      fromBank: fromWalletData?.bankId || '',
+      toBank: toWalletData?.bankId || '',
+      fromClient: fromWalletData?.clientName || '',
+      toClient: toWalletData?.clientName || ''
+    };
+  };
+
+  const filteredTransactions = transactions.filter((tx) => {
+    const searchValue = transactionSearch.toLowerCase().trim();
+
+    const fromWallet = String(tx.from || '').toLowerCase();
+    const toWalletValue = String(tx.to || '').toLowerCase();
+
+    const { fromBank, toBank, fromClient, toClient } = getTransactionBankInfo(tx);
+
+    const fromBankLower = String(fromBank).toLowerCase();
+    const toBankLower = String(toBank).toLowerCase();
+    const fromClientLower = String(fromClient).toLowerCase();
+    const toClientLower = String(toClient).toLowerCase();
+
+    const matchesSearch =
+      searchValue === '' ||
+      fromWallet.includes(searchValue) ||
+      toWalletValue.includes(searchValue) ||
+      fromBankLower.includes(searchValue) ||
+      toBankLower.includes(searchValue) ||
+      fromClientLower.includes(searchValue) ||
+      toClientLower.includes(searchValue);
+
+    const matchesBankFilter =
+      transactionBankFilter === 'ALL' ||
+      fromBank === transactionBankFilter ||
+      toBank === transactionBankFilter;
+
+    const matchesSuspiciousFilter =
+      showSuspicious ? (tx.suspicious || tx.isSuspicious) : true;
+
+    return matchesSearch && matchesBankFilter && matchesSuspiciousFilter;
+  });
+
+  const totalPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+  const startIndex = (currentPage - 1) * transactionsPerPage;
+
+  const paginatedTransactions = filteredTransactions.slice(
+    startIndex,
+    startIndex + transactionsPerPage
+  );
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const clearTransactionFilters = () => {
+    setTransactionSearch('');
+    setTransactionBankFilter('ALL');
+    setCurrentPage(1);
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -265,17 +386,20 @@ function App() {
           <h1><span className="logo">🏦</span> eAUD</h1>
           <p>Australia's Central Bank Digital Currency</p>
         </div>
+
         <div className="header-right">
           <div className="user-badge" style={{ borderColor: roleBadge.color, color: roleBadge.color }}>
             {roleBadge.icon}
             <span>{roleBadge.text}</span>
           </div>
+
           <div className="user-info">
             <span>{user?.name}</span>
             <button className="logout-btn" onClick={logout}>
               <FaSignOutAlt /> Logout
             </button>
           </div>
+
           <div className="live-badge">
             <span className="live-dot"></span>
             LIVE
@@ -303,6 +427,7 @@ function App() {
             <p className="stat-value">{totalWallets}</p>
           </div>
         </div>
+
         <div className="stat-card">
           <div className="stat-icon"><FaMoneyBillWave /></div>
           <div className="stat-info">
@@ -310,6 +435,7 @@ function App() {
             <p className="stat-value">{formatBalance(totalSupply)}</p>
           </div>
         </div>
+
         <div className="stat-card">
           <div className="stat-icon"><FaBuilding /></div>
           <div className="stat-info">
@@ -317,6 +443,7 @@ function App() {
             <p className="stat-value">{activeBanks}</p>
           </div>
         </div>
+
         <div className="stat-card">
           <div className="stat-icon"><FaChartLine /></div>
           <div className="stat-info">
@@ -328,102 +455,116 @@ function App() {
 
       <div className="main-content">
         <div className="left-column">
-          {/* RBA Section with KYC */}
           {isRBA && (
             <div className="card">
               <h2><FaPlus /> Create New Wallet (RBA)</h2>
-              <p className="form-note" style={{ marginBottom: '16px', color: '#ffaa00' }}>
-                ⚠️ KYC documentation is required for ALL wallet creation including RBA.
-              </p>
 
-              {showKycForm && (
-                <div className="kyc-section" style={{ background: 'rgba(0,255,255,0.05)', padding: '16px', borderRadius: '16px', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ffff' }}>📋 Step 1: Upload KYC Document</h3>
-                  <div className="form-group">
-                    <label>Wallet ID</label>
-                    <input type="text" placeholder="e.g., rba-wallet-001" value={kycWalletId} onChange={(e) => setKycWalletId(e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label>Legal Name of Organization</label>
-                    <input type="text" placeholder="Full legal name as per registration" value={kycLegalName} onChange={(e) => setKycLegalName(e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label>Purpose of Account</label>
-                    <input type="text" placeholder="e.g., System operations, Reserve management" value={kycPurpose} onChange={(e) => setKycPurpose(e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label>KYC Document (Passport / License / Bill)</label>
-                    <input id="kyc-file-input-rba" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setKycFile(e.target.files[0])} />
-                  </div>
-                  <button className="btn-primary" onClick={uploadKyc} disabled={isLoading}>
-                    {isLoading ? 'Uploading...' : '📄 Upload KYC Document'}
-                  </button>
-                </div>
-              )}
+              <div className="form-group">
+                <label>Wallet ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g., rba-wallet-001"
+                  value={createWalletId}
+                  onChange={(e) => setCreateWalletId(e.target.value)}
+                />
+              </div>
 
-              {kycUploaded && (
-                <div className="create-wallet-section" style={{ background: 'rgba(0,255,0,0.05)', padding: '16px', borderRadius: '16px' }}>
-                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ff88' }}>✅ Step 2: Create Wallet</h3>
-                  <p className="form-note" style={{ marginBottom: '12px', color: '#00ff88' }}>
-                    KYC verified for {kycUploadedWalletId}. You can now create the wallet.
-                  </p>
-                  <div className="form-group">
-                    <label>Wallet ID</label>
-                    <input type="text" value={createWalletId} disabled style={{ opacity: 0.7 }} />
-                  </div>
-                  <div className="form-group">
-                    <label>Legal Name of Organization</label>
-                    <input type="text" value={createLegalName} disabled style={{ opacity: 0.7 }} />
-                  </div>
-                  <div className="form-group">
-                    <label>Purpose of Account</label>
-                    <input type="text" value={createPurpose} disabled style={{ opacity: 0.7 }} />
-                  </div>
-                  <div className="form-group">
-                    <label>Issuing Bank</label>
-                    <select value={createBankId} onChange={(e) => setCreateBankId(e.target.value)}>
-                      <option value="BankA">Bank A</option>
-                      <option value="BankB">Bank B</option>
-                    </select>
-                  </div>
-                  <button className="btn-primary" onClick={createWallet} disabled={isLoading}>
-                    {isLoading ? 'Creating...' : '✨ Create Wallet'}
-                  </button>
-                  <button className="btn-secondary" onClick={resetKycForm} style={{ marginTop: '8px' }}>
-                    Start Over (New Wallet)
-                  </button>
-                </div>
-              )}
+              <div className="form-group">
+                <label>Legal Name of Organization</label>
+                <input
+                  type="text"
+                  placeholder="Full legal name"
+                  value={createLegalName}
+                  onChange={(e) => setCreateLegalName(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Purpose of Account</label>
+                <input
+                  type="text"
+                  placeholder="Purpose of this account"
+                  value={createPurpose}
+                  onChange={(e) => setCreatePurpose(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Issuing Bank</label>
+                <select value={createBankId} onChange={(e) => setCreateBankId(e.target.value)}>
+                  <option value="BankA">Bank A</option>
+                  <option value="BankB">Bank B</option>
+                </select>
+              </div>
+
+              <button className="btn-primary" onClick={createWallet} disabled={isLoading}>
+                {isLoading ? 'Creating...' : '✨ Create Wallet'}
+              </button>
             </div>
           )}
 
-          {/* Bank Section */}
           {(isBankA || isBankB) && (
             <div className="card">
               <h2><FaPlus /> Create New Customer Wallet</h2>
+
               <p className="form-note" style={{ marginBottom: '16px', color: '#00ffff' }}>
                 ⚠️ KYC verification is required for each new wallet (AML/CTF compliance)
               </p>
 
               {showKycForm && (
-                <div className="kyc-section" style={{ background: 'rgba(0,255,255,0.05)', padding: '16px', borderRadius: '16px', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ffff' }}>📋 Step 1: Upload KYC Document</h3>
+                <div
+                  className="kyc-section"
+                  style={{
+                    background: 'rgba(0,255,255,0.05)',
+                    padding: '16px',
+                    borderRadius: '16px',
+                    marginBottom: '20px'
+                  }}
+                >
+                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ffff' }}>
+                    📋 Step 1: Upload KYC Document
+                  </h3>
+
                   <div className="form-group">
                     <label>Wallet ID</label>
-                    <input type="text" placeholder="e.g., customer-001" value={kycWalletId} onChange={(e) => setKycWalletId(e.target.value)} />
+                    <input
+                      type="text"
+                      placeholder="e.g., customer-001"
+                      value={kycWalletId}
+                      onChange={(e) => setKycWalletId(e.target.value)}
+                    />
                   </div>
+
                   <div className="form-group">
                     <label>Legal Name of Organization</label>
-                    <input type="text" placeholder="Full legal name as per registration" value={kycLegalName} onChange={(e) => setKycLegalName(e.target.value)} />
+                    <input
+                      type="text"
+                      placeholder="Full legal name as per registration"
+                      value={kycLegalName}
+                      onChange={(e) => setKycLegalName(e.target.value)}
+                    />
                   </div>
+
                   <div className="form-group">
                     <label>Purpose of Account</label>
-                    <input type="text" placeholder="e.g., Business operations, Salary payments" value={kycPurpose} onChange={(e) => setKycPurpose(e.target.value)} />
+                    <input
+                      type="text"
+                      placeholder="e.g., Business operations, Salary payments"
+                      value={kycPurpose}
+                      onChange={(e) => setKycPurpose(e.target.value)}
+                    />
                   </div>
+
                   <div className="form-group">
                     <label>KYC Document (Passport / License / Bill)</label>
-                    <input id="kyc-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setKycFile(e.target.files[0])} />
+                    <input
+                      id="kyc-file-input"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setKycFile(e.target.files[0])}
+                    />
                   </div>
+
                   <button className="btn-primary" onClick={uploadKyc} disabled={isLoading}>
                     {isLoading ? 'Uploading...' : '📄 Upload KYC Document'}
                   </button>
@@ -431,39 +572,69 @@ function App() {
               )}
 
               {kycUploaded && (
-                <div className="create-wallet-section" style={{ background: 'rgba(0,255,0,0.05)', padding: '16px', borderRadius: '16px' }}>
-                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ff88' }}>✅ Step 2: Create Wallet</h3>
+                <div
+                  className="create-wallet-section"
+                  style={{
+                    background: 'rgba(0,255,0,0.05)',
+                    padding: '16px',
+                    borderRadius: '16px'
+                  }}
+                >
+                  <h3 style={{ fontSize: '0.9rem', marginBottom: '12px', color: '#00ff88' }}>
+                    ✅ Step 2: Create Wallet
+                  </h3>
+
                   <p className="form-note" style={{ marginBottom: '12px', color: '#00ff88' }}>
                     KYC verified for {kycUploadedWalletId}. You can now create the wallet.
                   </p>
+
                   <div className="form-group">
                     <label>Wallet ID</label>
                     <input type="text" value={createWalletId} disabled style={{ opacity: 0.7 }} />
                   </div>
+
                   <div className="form-group">
                     <label>Legal Name of Organization</label>
                     <input type="text" value={createLegalName} disabled style={{ opacity: 0.7 }} />
                   </div>
+
                   <div className="form-group">
                     <label>Purpose of Account</label>
                     <input type="text" value={createPurpose} disabled style={{ opacity: 0.7 }} />
                   </div>
+
                   <div className="form-group">
                     <label>Issuing Bank</label>
-                    <select value={createBankId} onChange={(e) => setCreateBankId(e.target.value)} disabled={isBankA || isBankB} style={{ opacity: 0.7 }}>
+                    <select
+                      value={createBankId}
+                      onChange={(e) => setCreateBankId(e.target.value)}
+                      disabled={isBankA || isBankB}
+                      style={{ opacity: 0.7 }}
+                    >
                       <option value="BankA">Bank A</option>
                       <option value="BankB">Bank B</option>
                     </select>
+
                     {(isBankA || isBankB) && (
                       <p className="form-note" style={{ color: '#00ff88', marginTop: '4px' }}>
                         ✅ You are creating a wallet for {userBankLabel}. This cannot be changed.
                       </p>
                     )}
                   </div>
+
                   <button className="btn-primary" onClick={createWallet} disabled={isLoading}>
                     {isLoading ? 'Creating...' : '✨ Create Wallet'}
                   </button>
-                  <button className="btn-secondary" onClick={resetKycForm} style={{ marginTop: '8px' }}>
+
+                  <button
+                    className="btn-secondary"
+                    onClick={resetKycForm}
+                    style={{
+                      marginTop: '8px',
+                      background: 'rgba(255,68,68,0.2)',
+                      color: '#ff4444'
+                    }}
+                  >
                     Start Over (New Customer)
                   </button>
                 </div>
@@ -471,13 +642,14 @@ function App() {
             </div>
           )}
 
-          {/* AUSTRAC Section */}
           {isAUSTRAC && (
             <div className="card">
               <h2><FaEye /> AML Monitoring</h2>
+
               <button className="btn-secondary" onClick={() => setShowSuspicious(!showSuspicious)}>
                 <FaChartBar /> {showSuspicious ? 'Hide' : 'Show'} Suspicious Activity
               </button>
+
               <div className="risk-summary">
                 <p>🔴 High Risk: {suspiciousTransactions.filter(t => t.riskScore > 80).length}</p>
                 <p>🟡 Medium Risk: {suspiciousTransactions.filter(t => t.riskScore > 50 && t.riskScore <= 80).length}</p>
@@ -491,17 +663,28 @@ function App() {
         <div className="right-column">
           <div className="card">
             <h2><FaUsers /> All Wallets <span className="badge">{totalWallets}</span></h2>
+
             <div className="wallets-list">
               {wallets.length === 0 ? (
                 <p className="empty-state">No wallets found.</p>
               ) : (
                 wallets.map((wallet) => (
-                  <div key={wallet.walletId} className={`wallet-card ${selectedWallet === wallet.walletId ? 'selected' : ''}`} onClick={() => selectWallet(wallet.walletId)}>
+                  <div
+                    key={wallet.walletId}
+                    className={`wallet-card ${selectedWallet === wallet.walletId ? 'selected' : ''}`}
+                    onClick={() => selectWallet(wallet.walletId)}
+                  >
                     <div className="wallet-header">
                       <strong>{wallet.walletId}</strong>
-                      <span className={`bank-badge ${wallet.bankId === 'BankA' ? 'bank-a' : 'bank-b'}`}>{wallet.bankId}</span>
-                      {(isAUSTRAC || isRBA || isBankA || isBankB) && wallet.hasKyc && <FaCheck style={{ color: '#00ff88' }} title="KYC Verified" />}
+                      <span className={`bank-badge ${wallet.bankId === 'BankA' ? 'bank-a' : 'bank-b'}`}>
+                        {wallet.bankId}
+                      </span>
+
+                      {(isAUSTRAC || isRBA || isBankA || isBankB) && wallet.hasKyc && (
+                        <FaCheck style={{ color: '#00ff88' }} title="KYC Verified" />
+                      )}
                     </div>
+
                     <div className="wallet-details">
                       <span>👤 {wallet.clientName}</span>
                       <span>💰 {formatBalance(wallet.balance)}</span>
@@ -515,13 +698,35 @@ function App() {
           {selectedWallet && selectedWalletData && (isRBA || isBankA || isBankB || isCustomer) && (
             <div className="card selected-card">
               <h2>🎯 Selected Wallet</h2>
+
               <div className="selected-wallet-info">
                 <div className="info-row">
-                  <div className="info-item"><label>Wallet ID</label><span>{selectedWallet}</span></div>
-                  <div className="info-item"><label>Client</label><span>{selectedWalletData.clientName}</span></div>
-                  <div className="info-item"><label>Bank</label><span>{selectedWalletData.bankId}</span></div>
-                  <div className="info-item highlight"><label>Balance</label><span>{formatBalance(selectedWalletData.balance)}</span></div>
-                  <div className="info-item"><label>KYC Status</label><span style={{ color: selectedWalletHasKyc ? '#00ff88' : '#ff4444' }}>{selectedWalletHasKyc ? '✅ Verified' : '❌ Not Verified'}</span></div>
+                  <div className="info-item">
+                    <label>Wallet ID</label>
+                    <span>{selectedWallet}</span>
+                  </div>
+
+                  <div className="info-item">
+                    <label>Client</label>
+                    <span>{selectedWalletData.clientName}</span>
+                  </div>
+
+                  <div className="info-item">
+                    <label>Bank</label>
+                    <span>{selectedWalletData.bankId}</span>
+                  </div>
+
+                  <div className="info-item highlight">
+                    <label>Balance</label>
+                    <span>{formatBalance(selectedWalletData.balance)}</span>
+                  </div>
+
+                  <div className="info-item">
+                    <label>KYC Status</label>
+                    <span style={{ color: selectedWalletHasKyc ? '#00ff88' : '#ff4444' }}>
+                      {selectedWalletHasKyc ? '✅ Verified' : '❌ Not Verified'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -529,16 +734,36 @@ function App() {
                 {isRBA && (
                   <div className="action-card">
                     <h3>💎 Mint New eAUD</h3>
-                    <input type="number" placeholder="Amount (eAUD)" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                    <button className="btn-mint" onClick={addFunds} disabled={isLoading}>{isLoading ? 'Processing...' : '💰 Add Funds'}</button>
+                    <input
+                      type="number"
+                      placeholder="Amount (eAUD)"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                    <button className="btn-mint" onClick={addFunds} disabled={isLoading}>
+                      {isLoading ? 'Processing...' : '💰 Add Funds'}
+                    </button>
                     <p className="action-note">🔒 Only RBA can mint new eAUD</p>
                   </div>
                 )}
+
                 <div className="action-card">
                   <h3>🔄 Transfer eAUD</h3>
-                  <input type="text" placeholder="Recipient Wallet ID" value={toWallet} onChange={(e) => setToWallet(e.target.value)} />
-                  <input type="number" placeholder="Amount (eAUD)" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                  <button className="btn-transfer" onClick={transferFunds} disabled={isLoading}>{isLoading ? 'Processing...' : '💸 Transfer'}</button>
+                  <input
+                    type="text"
+                    placeholder="Recipient Wallet ID"
+                    value={toWallet}
+                    onChange={(e) => setToWallet(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Amount (eAUD)"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                  <button className="btn-transfer" onClick={transferFunds} disabled={isLoading}>
+                    {isLoading ? 'Processing...' : '💸 Transfer'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -549,6 +774,67 @@ function App() {
       <div className="transactions-section">
         <div className="card full-width">
           <h2><FaChartLine /> {isAUSTRAC ? 'AML Transaction Monitoring' : 'Recent Transactions'}</h2>
+
+          <div
+            style={{
+              marginBottom: '16px',
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Search by wallet ID, bank, or client..."
+              value={transactionSearch}
+              onChange={(e) => setTransactionSearch(e.target.value)}
+              style={{
+                flex: '1',
+                minWidth: '260px',
+                padding: '12px',
+                borderRadius: '12px',
+                border: '1px solid #00ffff',
+                background: '#0f172a',
+                color: '#ffffff',
+                outline: 'none'
+              }}
+            />
+
+            <select
+              value={transactionBankFilter}
+              onChange={(e) => setTransactionBankFilter(e.target.value)}
+              style={{
+                minWidth: '160px',
+                padding: '12px',
+                borderRadius: '12px',
+                border: '1px solid #00ffff',
+                background: '#0f172a',
+                color: '#ffffff',
+                outline: 'none'
+              }}
+            >
+              <option value="ALL">All Banks</option>
+              <option value="BankA">Bank A</option>
+              <option value="BankB">Bank B</option>
+            </select>
+
+            <button
+              className="btn-secondary"
+              onClick={clearTransactionFilters}
+              style={{
+                padding: '12px 18px',
+                borderRadius: '12px'
+              }}
+            >
+              Clear
+            </button>
+
+            <span style={{ color: '#888', fontSize: '0.9rem' }}>
+              Showing {paginatedTransactions.length} of {filteredTransactions.length} transaction(s)
+            </span>
+          </div>
+
           <div className="transactions-table">
             <table>
               <thead>
@@ -561,25 +847,94 @@ function App() {
                   {isAUSTRAC && <th>Alert</th>}
                 </tr>
               </thead>
+
               <tbody>
-                {transactions.length === 0 ? (
+                {paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={isAUSTRAC ? 6 : 4} className="empty-state">No transactions</td>
+                    <td colSpan={isAUSTRAC ? 6 : 4} className="empty-state">
+                      No transactions found
+                    </td>
                   </tr>
                 ) : (
-                  (showSuspicious ? transactions.filter(t => t.suspicious) : transactions).map((tx) => (
-                    <tr key={tx.id} className={tx.suspicious ? 'suspicious-row' : ''}>
-                      <td>{format(new Date(tx.timestamp), 'hh:mm a')}</td>
-                      <td><strong>{tx.from}</strong> → <strong>{tx.to}</strong></td>
-                      <td className="amount">{formatBalance(tx.amount)}</td>
-                      <td className="status">{getStatusIcon(tx.status)} {tx.status}</td>
-                      {isAUSTRAC && <td className={tx.riskScore > 70 ? 'high-risk' : 'low-risk'}>{tx.riskScore}%</td>}
-                      {isAUSTRAC && <td>{tx.suspicious ? <span className="alert">⚠️ FLAGGED</span> : '✓'}</td>}
-                    </tr>
-                  ))
+                  paginatedTransactions.map((tx) => {
+                    const { fromBank, toBank } = getTransactionBankInfo(tx);
+
+                    return (
+                      <tr key={tx.id} className={(tx.suspicious || tx.isSuspicious) ? 'suspicious-row' : ''}>
+                        <td>{format(new Date(tx.timestamp), 'hh:mm a')}</td>
+
+                        <td>
+                          <strong>{tx.from}</strong>
+                          {' '}
+                          {fromBank && (
+                            <span style={{ color: '#00ffff', fontSize: '0.8rem' }}>
+                              ({fromBank})
+                            </span>
+                          )}
+                          {' → '}
+                          <strong>{tx.to}</strong>
+                          {' '}
+                          {toBank && (
+                            <span style={{ color: '#ff00ff', fontSize: '0.8rem' }}>
+                              ({toBank})
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="amount">{formatBalance(tx.amount)}</td>
+                        <td className="status">{getStatusIcon(tx.status)} {tx.status}</td>
+
+                        {isAUSTRAC && (
+                          <td className={tx.riskScore > 70 ? 'high-risk' : 'low-risk'}>
+                            {tx.riskScore}%
+                          </td>
+                        )}
+
+                        {isAUSTRAC && (
+                          <td>
+                            {(tx.suspicious || tx.isSuspicious)
+                              ? <span className="alert">⚠️ FLAGGED</span>
+                              : '✓'}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div
+            style={{
+              marginTop: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '12px'
+            }}
+          >
+            <button
+              className="btn-secondary"
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1 }}
+            >
+              Previous
+            </button>
+
+            <span style={{ color: '#00ffff', fontWeight: 'bold' }}>
+              Page {totalPages === 0 ? 0 : currentPage} of {totalPages}
+            </span>
+
+            <button
+              className="btn-secondary"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages || totalPages === 0}
+              style={{ opacity: currentPage === totalPages || totalPages === 0 ? 0.5 : 1 }}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -589,13 +944,17 @@ function App() {
           <span>📊 System Status: All participants online</span>
           <span>🕐 Last Updated: {formatDistanceToNow(lastUpdated)} ago</span>
         </div>
+
         <div className="footer-participants">
           <span>🏛️ RBA (Central Bank)</span>
           <span>🏦 BankA (Commercial)</span>
           <span>🏦 BankB (Commercial)</span>
           <span>👁️ AUSTRAC (Regulator)</span>
         </div>
-        <div className="footer-copyright">© 2024 eAUD CBDC | Powered by Hyperledger Fabric | RBA Regulated Network</div>
+
+        <div className="footer-copyright">
+          © 2024 eAUD CBDC | Powered by Hyperledger Fabric | RBA Regulated Network
+        </div>
       </footer>
 
       {message && <div className={`toast-message ${messageType}`}>{message}</div>}
