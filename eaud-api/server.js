@@ -97,24 +97,46 @@ const FLAGGED_ACCOUNTS_FILE = path.join(__dirname, 'flagged-accounts.json');
 if (fs.existsSync(FLAGGED_ACCOUNTS_FILE)) flaggedAccounts = JSON.parse(fs.readFileSync(FLAGGED_ACCOUNTS_FILE, 'utf8'));
 function saveFlaggedAccounts() { fs.writeFileSync(FLAGGED_ACCOUNTS_FILE, JSON.stringify(flaggedAccounts, null, 2)); }
 
-// Suspicious detection
-function detectSuspicious(amount, fromWallet, toWallet, history) {
+// Suspicious detection - FIXED to accept wallet objects
+function detectSuspicious(amount, fromWallet, toWallet, history, fromWalletObj, toWalletObj) {
     const flags = [];
+    
+    // Rule 1: Large transaction > 1000 eAUD
     if (amount > 1000) flags.push('LARGE_TRANSACTION (>1000 eAUD)');
+    
+    // Rule 2: Very large transaction > 5000 eAUD
     if (amount > 5000) flags.push('VERY_LARGE_TRANSACTION (>5000 eAUD)');
+    
+    // Rule 3: Round number patterns (ends with 000)
     if (amount % 1000 === 0 && amount > 1000) flags.push('ROUND_NUMBER_PATTERN');
+    
+    // Rule 4: Rapid transactions (more than 3 in last minute)
     const recentTx = history.filter(t => new Date(t.timestamp) > new Date(Date.now() - 60000));
-    if (recentTx.length > 3) flags.push('RAPID_TRANSACTIONS');
+    if (recentTx.length > 3) flags.push('RAPID_TRANSACTIONS (3+ per minute)');
+    
+    // Rule 5: Time anomaly (outside banking hours 9am-5pm)
     const txHour = new Date().getHours();
     if (txHour < 9 || txHour >= 17) flags.push('OUTSIDE_BANKING_HOURS');
+    
+    // Rule 6: Historical pattern deviation (amount > 2x average of last 10 transactions)
     const userTransactions = history.filter(t => t.from === fromWallet || t.to === fromWallet);
     if (userTransactions.length >= 5) {
         const recentAmounts = userTransactions.slice(0, 10).map(t => t.amount);
         const avgAmount = recentAmounts.reduce((a, b) => a + b, 0) / recentAmounts.length;
-        if (amount > avgAmount * 2 && avgAmount > 0) flags.push(`HISTORICAL_DEVIATION (${Math.round(amount / avgAmount)}x normal)`);
+        if (amount > avgAmount * 2 && avgAmount > 0) {
+            flags.push(`HISTORICAL_DEVIATION (${Math.round(amount / avgAmount)}x normal)`);
+        }
     }
-    if (flaggedAccounts.includes(fromWallet) || flaggedAccounts.includes(toWallet)) flags.push('FLAGGED_ACCOUNT_ON_WATCHLIST');
-    return { isSuspicious: flags.length > 0, flags, riskScore: Math.min(flags.length * 20 + Math.floor(amount / 2000), 100) };
+    
+    // Rule 7: Flagged account check
+    if (flaggedAccounts.includes(fromWallet) || flaggedAccounts.includes(toWallet)) {
+        flags.push('FLAGGED_ACCOUNT_ON_WATCHLIST');
+    }
+
+    const isSuspicious = flags.length > 0;
+    const riskScore = Math.min(flags.length * 20 + Math.floor(amount / 2000), 100);
+
+    return { isSuspicious, flags, riskScore };
 }
 
 // Connection profile
@@ -235,7 +257,6 @@ app.get('/api/wallets', authenticate, async (req, res) => {
         if (role === 'banka_admin') wallets = wallets.filter(w => w.bankId === 'BankA');
         else if (role === 'bankb_admin') wallets = wallets.filter(w => w.bankId === 'BankB');
 
-        // Add KYC status for all roles that need to see it
         wallets = wallets.map(w => ({
             ...w,
             hasKyc: kycRecords.some(k => k.walletId === w.walletId),
@@ -251,21 +272,18 @@ app.get('/api/wallets', authenticate, async (req, res) => {
 app.post('/api/wallet/create', authenticate, async (req, res) => {
     try {
         const { walletId, legalName, bankId, purpose } = req.body;
-        
-        // KYC check - required for ALL wallet creation (RBA, BankA, BankB)
-        // Client requested in Week 8 that RBA also provide documentation
+
         const hasKyc = kycRecords.some(k => k.walletId === walletId);
         if (!hasKyc) {
             return res.status(400).json({ success: false, error: 'KYC document required before wallet creation. Please upload KYC first.' });
         }
-        
+
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('CreateWallet', walletId, legalName, bankId);
         await gateway.disconnect();
 
-        // Update KYC status for this wallet if exists
         const kyc = kycRecords.find(k => k.walletId === walletId);
         if (kyc) {
             kyc.status = 'VERIFIED';
@@ -293,35 +311,73 @@ app.post('/api/wallet/addfunds', authenticate, async (req, res) => {
     }
 });
 
+// ============ TRANSFER ENDPOINT WITH SUSPICIOUS DETECTION ============
+
 app.post('/api/transfer', authenticate, async (req, res) => {
     try {
         const { fromWallet, toWallet, amount } = req.body;
+        const amountNum = Number(amount);
+        
         const gateway = await getGateway();
         const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
-        const result = await contract.submitTransaction('TransferEAUD', fromWallet, toWallet, amount.toString());
-        await gateway.disconnect();
-
-        // Add to transaction history
+        
+        // Get wallet details for detection
+        const fromResult = await contract.evaluateTransaction('QueryWallet', fromWallet);
+        const fromWalletObj = JSON.parse(fromResult.toString());
+        
+        const toResult = await contract.evaluateTransaction('QueryWallet', toWallet);
+        const toWalletObj = JSON.parse(toResult.toString());
+        
+        // Execute transfer
+        const result = await contract.submitTransaction('TransferEAUD', fromWallet, toWallet, amountNum.toString());
+        
+        // Run suspicious detection
+        const suspiciousCheck = detectSuspicious(amountNum, fromWallet, toWallet, transactionHistory, fromWalletObj, toWalletObj);
+        
+        // Add to transaction history WITH suspicious info
         const transaction = {
             id: `tx-${Date.now()}`,
             timestamp: new Date().toISOString(),
             from: fromWallet,
             to: toWallet,
-            amount: Number(amount),
-            status: 'completed'
+            amount: amountNum,
+            type: 'transfer',
+            status: 'completed',
+            fromBank: fromWalletObj.bankId,
+            toBank: toWalletObj.bankId,
+            suspicious: suspiciousCheck.isSuspicious,
+            flags: suspiciousCheck.flags,
+            riskScore: suspiciousCheck.riskScore
         };
+        
         transactionHistory.unshift(transaction);
+        
+        if (transactionHistory.length > 200) {
+            transactionHistory = transactionHistory.slice(0, 200);
+        }
         saveTransactions();
-
-        res.json({ success: true, transfer: JSON.parse(result.toString()) });
+        
+        await gateway.disconnect();
+        
+        res.json({ success: true, transfer: JSON.parse(result.toString()), suspicious: suspiciousCheck });
     } catch (error) {
+        console.error('Transfer error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 app.get('/api/transactions', authenticate, async (req, res) => {
-    res.json({ success: true, transactions: transactionHistory });
+    const role = req.user.role;
+    let filtered = [...transactionHistory];
+    
+    if (role === 'banka_admin') {
+        filtered = filtered.filter(t => t.fromBank === 'BankA');
+    } else if (role === 'bankb_admin') {
+        filtered = filtered.filter(t => t.fromBank === 'BankB');
+    }
+    
+    res.json({ success: true, transactions: filtered });
 });
 
 const PORT = 3001;
