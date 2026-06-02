@@ -7,6 +7,9 @@ const path = require('path');
 const multer = require('multer');
 const { jwtDecode } = require('jwt-decode');
 
+require("dotenv").config();
+const { sendSuspiciousTransactionEmail } = require("./emailService");
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -247,7 +250,7 @@ app.get('/api/flagged/list', authenticate, (req, res) => {
 app.get('/api/wallets', authenticate, async (req, res) => {
     try {
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('eaudchannel');
+        const network = await gateway.getNetwork('mychannel');
         const contract = network.getContract('eaud');
         const result = await contract.evaluateTransaction('GetAllWallets');
         await gateway.disconnect();
@@ -279,7 +282,7 @@ app.post('/api/wallet/create', authenticate, async (req, res) => {
         }
 
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('eaudchannel');
+        const network = await gateway.getNetwork('mychannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('CreateWallet', walletId, legalName, bankId);
         await gateway.disconnect();
@@ -301,7 +304,7 @@ app.post('/api/wallet/addfunds', authenticate, async (req, res) => {
     try {
         const { walletId, amount } = req.body;
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('eaudchannel');
+        const network = await gateway.getNetwork('mychannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('AddFunds', walletId, amount.toString());
         await gateway.disconnect();
@@ -319,7 +322,7 @@ app.post('/api/transfer', authenticate, async (req, res) => {
         const amountNum = Number(amount);
         
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('eaudchannel');
+        const network = await gateway.getNetwork('mychannel');
         const contract = network.getContract('eaud');
         
         // Get wallet details for detection
@@ -350,7 +353,16 @@ app.post('/api/transfer', authenticate, async (req, res) => {
             flags: suspiciousCheck.flags,
             riskScore: suspiciousCheck.riskScore
         };
-        
+if (suspiciousCheck.riskScore > 70) {
+    await sendSuspiciousTransactionEmail({
+        id: transaction.id,
+        fromWallet,
+        toWallet,
+        amount: Number(amount),
+        riskScore: suspiciousCheck.riskScore
+    });
+}
+
         transactionHistory.unshift(transaction);
         
         if (transactionHistory.length > 200) {
@@ -379,6 +391,7 @@ app.get('/api/transactions', authenticate, async (req, res) => {
     
     res.json({ success: true, transactions: filtered });
 });
+
 
 const PORT = 3001;
 app.listen(PORT, '0.0.0.0', () => console.log(`eAUD API server running on http://localhost:${PORT}`));
