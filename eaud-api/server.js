@@ -250,7 +250,7 @@ app.get('/api/flagged/list', authenticate, (req, res) => {
 app.get('/api/wallets', authenticate, async (req, res) => {
     try {
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('mychannel');
+        const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.evaluateTransaction('GetAllWallets');
         await gateway.disconnect();
@@ -282,7 +282,7 @@ app.post('/api/wallet/create', authenticate, async (req, res) => {
         }
 
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('mychannel');
+        const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('CreateWallet', walletId, legalName, bankId);
         await gateway.disconnect();
@@ -304,7 +304,7 @@ app.post('/api/wallet/addfunds', authenticate, async (req, res) => {
     try {
         const { walletId, amount } = req.body;
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('mychannel');
+        const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         const result = await contract.submitTransaction('AddFunds', walletId, amount.toString());
         await gateway.disconnect();
@@ -322,7 +322,7 @@ app.post('/api/transfer', authenticate, async (req, res) => {
         const amountNum = Number(amount);
         
         const gateway = await getGateway();
-        const network = await gateway.getNetwork('mychannel');
+        const network = await gateway.getNetwork('eaudchannel');
         const contract = network.getContract('eaud');
         
         // Get wallet details for detection
