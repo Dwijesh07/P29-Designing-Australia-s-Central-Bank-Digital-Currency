@@ -111,6 +111,70 @@ Keycloak	Open localhost:8080	Admin console loads, eAUD realm visible
 API	Open localhost:3001	API responds with connection confirmation
 Frontend	Open localhost:3000	Keycloak login page loads
 Role switching	Log out and log in as different role	Correct dashboard loads for each role
+
+## Docker Setup (Alternative Quick Start)
+
+As an alternative to the manual installation steps above, you can use Docker Compose to run the Keycloak, API, and UI containers together.
+
+> **Note:** Hyperledger Fabric must still be started separately using the `./network.sh up` command from Step 2 of the Quick Installation.
+
+### Prerequisites
+
+- Docker Desktop installed and running
+- Hyperledger Fabric network already started (`./network.sh up createChannel...`)
+
+### Quick Start with Docker Compose
+
+**1. Start Hyperledger Fabric (required, in a separate terminal)**
+
+```bash
+cd test-network
+./network.sh up createChannel -c eaudchannel -s couchdb
+
+2. Start the remaining services with Docker
+
+bash
+docker-compose up --build
+This single command starts:
+
+Service	Container Name	Port
+Keycloak	eaud-keycloak	8080
+Backend API	eaud-api	3001
+Frontend UI	eaud-ui	3000
+3. Access the application
+
+Frontend: http://localhost:3000
+
+Backend API: http://localhost:3001
+
+Keycloak Admin Console: http://localhost:8080 (admin / admin)
+
+Useful Docker Commands
+
+Command	Description
+docker-compose up	Start all services
+docker-compose up --build	Rebuild images and start
+docker-compose down	Stop all services
+docker-compose logs -f	View live logs
+docker ps	List running containers
+
+Troubleshooting Docker Setup
+Issue	                                      Solution
+Port already in use (3000, 3001, 8080)	   Stop existing services on those ports, or run docker-compose down
+Keycloak login page does not load	Wait     0–60 seconds for Keycloak to fully initialise
+API cannot connect to Fabric	Ensure       ./network.sh up is running in a separate terminal
+Docker Desktop not responding	Restart       Docker Desktop from the system tray
+
+
+File Structure for Docker
+text
+eaud-cbdc/
+├── docker-compose.yml     # Orchestrates Keycloak, API, and UI
+├── eaud-api/
+│   └── Dockerfile         # API container definition
+└── eaud-ui/
+    └── Dockerfile         # UI container definition (multi‑stage build)
+
 Repository Structure
 
 P29-Designing-Australia-s-Central-Bank-Digital-Currency/
