@@ -1,0 +1,63 @@
+# Docker Setup Instructions
+
+## Prerequisites
+
+- Docker Desktop installed and running
+- WSL2 enabled (Windows users)
+- Hyperledger Fabric network running separately (Fabric does not run inside this Docker Compose)
+
+## Services Included
+
+| Service | Container Name | Port |
+|---------|---------------|------|
+| Keycloak | eaud-keycloak | 8080 |
+| Backend API | eaud-api | 3001 |
+| Frontend UI | eaud-ui | 3000 |
+
+## Quick Start
+
+### Step 1: Start Hyperledger Fabric (in a separate terminal)
+
+```bash
+cd test-network
+./network.sh up createChannel -c eaudchannel -s couchdb
+
+
+Step 2: Start Docker services
+bash
+docker-compose up --build
+Step 3: Access the application
+Frontend UI: http://localhost:3000
+
+Backend API: http://localhost:3001
+
+Keycloak Admin: http://localhost:8080 (admin / admin)
+
+Login Credentials
+Role	Username	Password
+RBA Admin	rba_admin	admin123
+BankA Admin	banka_admin	bankA123
+BankB Admin	bankb_admin	bankB123
+AUSTRAC	austrac_admin	austrac123
+Customer	customer1	pass123
+Docker Commands
+Command	Description
+docker-compose up	Start all services
+docker-compose up --build	Rebuild and start all services
+docker-compose down	Stop all services
+docker-compose logs	View service logs
+docker ps	List running containers
+File Structure
+text
+eaud-cbdc/
+├── docker-compose.yml     # Docker orchestration
+├── eaud-api/
+│   └── Dockerfile         # API container definition
+└── eaud-ui/
+    └── Dockerfile         # UI container definition
+Troubleshooting
+Issue	Solution
+Port already in use	Stop existing services on ports 3000, 3001, 8080
+Docker not running	Start Docker Desktop from Windows Start Menu
+Keycloak connection refused	Wait 30 seconds for Keycloak to fully start
+API cannot connect to Fabric	Ensure ./network.sh up is running in another terminal
